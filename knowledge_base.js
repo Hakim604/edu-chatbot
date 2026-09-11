@@ -645,6 +645,66 @@
     },
 
     /**
+     * Get all knowledge items (activities, rules, exercises)
+     */
+    getKnowledgeItems(levelId, subjectId) {
+      const items = [];
+      const normLevel = normalizeLevel(levelId);
+      const normSub = normalizeSubject(subjectId);
+
+      // 1. Pull items from TEXTBOOK_CATALOG
+      TEXTBOOK_CATALOG.forEach(tb => {
+        if ((!levelId || normalizeLevel(tb.level) === normLevel || tb.level === levelId) &&
+            (!subjectId || normalizeSubject(tb.subject) === normSub || tb.subject === subjectId)) {
+          tb.chapters.forEach(c => {
+            c.activities.forEach(a => {
+              items.push({
+                textbookId: tb.id,
+                pageNumber: a.page,
+                level: tb.level,
+                subject: tb.subject,
+                lessonTitle: c.title,
+                title: a.title,
+                content: a.content || `${a.title} — صفحة ${a.page} من كتاب ${tb.title}`,
+                type: 'activity',
+                number: a.num
+              });
+            });
+          });
+        }
+      });
+
+      // 2. Pull items from DETAILED_PROGRAMMES
+      Object.keys(DETAILED_PROGRAMMES).forEach(subjKey => {
+        if (!subjectId || normSub === subjKey || subjectId === subjKey) {
+          const subjData = DETAILED_PROGRAMMES[subjKey];
+          Object.keys(subjData).forEach(lvlKey => {
+            if (!levelId || normLevel === lvlKey || levelId === lvlKey) {
+              const lvlData = subjData[lvlKey];
+              if (lvlData && lvlData.lessons) {
+                lvlData.lessons.forEach((l, idx) => {
+                  items.push({
+                    textbookId: 'tb_official_prog',
+                    pageNumber: 12 + idx * 4,
+                    level: lvlKey,
+                    subject: subjKey,
+                    lessonTitle: l.title,
+                    title: `${l.axis} — ${l.title}`,
+                    content: `المحور: ${l.axis} | الدرس: ${l.title} | المفاهيم: ${(l.notions || []).join('، ')} | الكفايات: ${(l.competencies || []).join('، ')}`,
+                    type: 'rule',
+                    number: idx + 1
+                  });
+                });
+              }
+            }
+          });
+        }
+      });
+
+      return items;
+    },
+
+    /**
      * Validate an item reference: checks if page/chapter exists in textbook catalog
      */
     validateReference({ level, subject, page, chapter }) {

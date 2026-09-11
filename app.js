@@ -131,14 +131,17 @@ const loadingDots       = $("loadingDots");
 const errorPanel        = $("errorPanel");
 const errorMsg          = $("errorMsg");
 
-// Export Buttons
-const btnSaveToArchive   = $("btnSaveToArchive");
-const btnGenerateVariant = $("btnGenerateVariant");
-const btnDownloadPDF     = $("btnDownloadPDF");
-const btnDownloadImg     = $("btnDownloadImg");
-const btnPrint           = $("btnPrint");
-const btnCopy            = $("btnCopy");
-const btnNew             = $("btnNew");
+// Export & Extra Buttons
+const btnSaveToArchive          = $("btnSaveToArchive");
+const btnGenerateVariant        = $("btnGenerateVariant");
+const btnDownloadPDF            = $("btnDownloadPDF");
+const btnDownloadImg            = $("btnDownloadImg");
+const btnPrint                  = $("btnPrint");
+const btnCopy                   = $("btnCopy");
+const btnNew                    = $("btnNew");
+const btnCreateProposedActivity = $("btnCreateProposedActivity");
+const btnReindexBook            = $("btnReindexBook");
+const btnRegenerateFiche        = $("btnRegenerateFiche");
 
 // ── INIT APPLICATION ───────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {

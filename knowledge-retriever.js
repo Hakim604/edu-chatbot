@@ -44,10 +44,34 @@
       }
     }
 
+    // Fallback search in KB if indexed DB items are empty
+    if ((!items || items.length === 0) && KB && KB.getKnowledgeItems) {
+      try {
+        const kbItems = KB.getKnowledgeItems ? KB.getKnowledgeItems(level, subject) : [];
+        items = kbItems.map((k, idx) => ({
+          textbookId: k.textbookId || 'tb_official',
+          pageNumber: k.pageNumber || (10 + idx * 2),
+          level: level || k.level || '9eme',
+          subject: subject || k.subject || 'math',
+          title: k.title || k.lessonTitle || 'درس',
+          lesson: k.lessonTitle || lesson || '',
+          content: k.content || k.summary || '',
+          type: k.type || 'activity',
+          number: k.number || 1
+        }));
+      } catch (e) {
+        items = [];
+      }
+    }
+
     const norm = (s) => {
       if (!s) return '';
       let str = String(s).toLowerCase();
-      str = str.replace(/[\u064B-\u0652]/g, '').replace(/[أإآ]/g, 'ا').replace(/ـ/g, '').replace(/ة\b/g, 'ه');
+      str = str.replace(/[\u064B-\u0652]/g, '')
+               .replace(/[أإآءئؤ]/g, 'ا')
+               .replace(/ـ/g, '')
+               .replace(/ة\b/g, 'ه')
+               .replace(/\bال/g, ''); // Remove AL prefix for root term matching
       return str.trim();
     };
 
@@ -148,6 +172,8 @@
                (itemTitleNorm && itemTitleNorm.includes(targetLesson)) ||
                (itemContentNorm && itemContentNorm.includes(targetLesson));
       });
+    } else if (targetQuery) {
+      filteredScored = scored.filter(s => s.score > 0);
     }
 
     filteredScored.sort((a, b) => b.score - a.score);
