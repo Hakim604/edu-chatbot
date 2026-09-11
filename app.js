@@ -1955,26 +1955,46 @@ ${subjectRules}
 --- هيكل الجذاذة الرسمي (اتبعه بالترتيب دون تغيير):
 
 \`\`\`html
-<!-- ════ القسم 1: التقديم للأستاذ ════ -->
+<!-- ════ 1. الترويسة البصرية الرئيسية الجذاذة الرسمية ════ -->
+<div class="tunisian-fiche-banner">
+  <div class="fiche-banner-right">
+    <div class="fiche-school-badge">
+      <span class="fiche-school-name">🏫 ${schoolName || "المدرسة الإعدادية / المعهد"}</span>
+      <span class="fiche-year-pill">السنة الدراسية: ${schoolYear}</span>
+    </div>
+  </div>
+
+  <div class="fiche-banner-center">
+    <span class="fiche-title-pill">🏷️ ${titleVal}</span>
+    <div class="fiche-axis-label">📍 المحور: ${unitVal || "البرنامج الرسمي"}</div>
+  </div>
+
+  <div class="fiche-banner-left">
+    <span class="fiche-teacher-name">👨‍🏫 ${teacherName}</span>
+    <span class="fiche-level-subject">📚 ${subjectLabel} — ${levelLabel}</span>
+  </div>
+</div>
+
+<!-- ════ 2. البيانات الإدارية والكفايات ════ -->
 <div class="official-admin-block">
   <table class="fiche-presentation-table">
     <tr>
-      <td colspan="2"><strong>الجمهورية التونسية — وزارة التربية</strong> | <strong>المؤسسة:</strong> ${schoolName}</td>
+      <td colspan="2"><strong>الجمهورية التونسية • وزارة التربية</strong> | <strong>المؤسسة:</strong> ${schoolName}</td>
       <td colspan="2"><strong>السنة الدراسية:</strong> ${schoolYear}</td>
     </tr>
     <tr>
       <td><strong>الأستاذ(ة):</strong> ${teacherName}</td>
-      <td><strong>المادة:</strong> ${subjectLabel}</td>
       <td><strong>المستوى:</strong> ${levelLabel}</td>
-      <td><strong>المدة:</strong> ${duration}</td>
+      <td><strong>المادة:</strong> ${subjectLabel}</td>
+      <td><strong>المدة الزمنية:</strong> ${duration}</td>
     </tr>
     <tr>
-      <td colspan="2"><strong>المحور:</strong> ${unitVal || "البرنامج الرسمي"}</td>
+      <td colspan="2"><strong>المحور:</strong> ${unitVal || "مبرهنة طالس وتطبيقاتها"}</td>
       <td colspan="2"><strong>عنوان الدرس:</strong> ${titleVal}</td>
     </tr>
     <tr>
-      <td colspan="2"><strong>🎯 الكفايات المستهدفة:</strong> [اكتب الكفايات المعرفية والمنهجية المستهدفة]</td>
-      <td colspan="2"><strong>📌 الأهداف الإجرائية:</strong> [اكتب الأهداف السلوكية والمعرفية للحصة]</td>
+      <td colspan="2"><strong>🎯 الكفايات المستهدفة:</strong> [صياغة الكفايات المعرفية والمنهجية المستهدفة من كتاب التلميذ]</td>
+      <td colspan="2"><strong>📌 الأهداف الإجرائية:</strong> [صياغة الأهداف الإجرائية السلوكية للحصة]</td>
     </tr>
     <tr>
       <td colspan="2"><strong>🧠 المكتسبات القبلية:</strong> [المفاهيم والقواعد السابقة الضرورية]</td>
