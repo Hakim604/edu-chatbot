@@ -1,0 +1,33 @@
+﻿# Node modules
+node_modules/
+
+# Build output
+dist/
+dist.zip
+*.zip
+
+# Desktop/Electron files
+main.js
+package.json
+package-lock.json
+*.bat
+*.vbs
+*.ps1
+*.py
+icon.ico
+
+# Backup files
+*.bak
+*.bak2
+*.bak3
+*.bak9_*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files (kept in tests/ folder)
+test_*.js
+
+# Logs
+*.log
