@@ -428,11 +428,27 @@ async function updateKnowledgeSourcesCard() {
         kbProgStatus.innerHTML = '<span style="color:#b45309;">⚠️ غير مدرج بالبرنامج الرسمي الأولي (سيتم التوليد وفق المنهاج التونسي العام)</span>';
       }
 
-      // 2. Textbook Activities & Pages
-      if (searchRes.textbookActivities && searchRes.textbookActivities.length > 0) {
-        const pages = [...new Set(searchRes.textbookActivities.map(a => a.page).filter(Boolean))];
-        const pagesText = pages.length > 0 ? ` — ص ${pages.join(', ')}` : '';
-        kbTextbookStatus.innerHTML = `<span style="color:#15803d; font-weight:600;">✓ النشاط متوفر ${pagesText}</span>`;
+      // 2. Textbook Activities & Pages Range State
+      const fromP = parseInt(pageFrom.value, 10);
+      const toP   = parseInt(pageTo.value, 10);
+      const hasPageRange = !isNaN(fromP);
+      const hasRetrievedActs = searchRes.textbookActivities && searchRes.textbookActivities.length > 0;
+
+      if (hasPageRange || hasRetrievedActs) {
+        const pages = [...new Set((searchRes.textbookActivities || []).map(a => a.page).filter(Boolean))];
+        let pagesText = "";
+        if (hasPageRange) {
+          const endP = !isNaN(toP) ? toP : fromP;
+          pagesText = (fromP === endP) ? `ص ${fromP}` : `ص ${fromP}–${endP}`;
+        } else if (pages.length > 0) {
+          pagesText = `ص ${pages.join(', ')}`;
+        }
+
+        kbTextbookStatus.innerHTML = `<span style="color:#15803d; font-weight:600;">🟢 متوفر ومفهرس (CNP ${pagesText})</span>`;
+        if (kbWarningBox) kbWarningBox.hidden = true;
+      } else if (currentBook) {
+        kbTextbookStatus.innerHTML = `<span style="color:#d97706; font-weight:600;">🟠 موجود — يحتاج تحديد أرقام الصفحات</span>`;
+        if (kbWarningBox) kbWarningBox.hidden = true;
       } else {
         kbTextbookStatus.innerHTML = '<span style="color:#64748b;">⚪ غير متوفر في الكتالوج الحالي</span>';
       }
@@ -443,12 +459,12 @@ async function updateKnowledgeSourcesCard() {
 
       kbSearchStatus.textContent = "تم استرجاع المعطيات بنجاح";
 
-      // 4. Warning Box logic
+      // 4. Warning Box logic (Hidden when textbook pages/content is retrieved)
       if (kbWarningBox) {
-        if (!searchRes.official) {
+        if (!searchRes.official && !hasPageRange && !hasRetrievedActs) {
           kbWarningBox.hidden = false;
           kbWarningText.textContent = `⚠️ الدرس «${titleVal || unitVal}» غير مدرج صراحة في كشوف البرامج الرسمية الحالية. لن يُعرض كدرس رسمي معتمد.`;
-        } else if (!searchRes.textbookActivities || searchRes.textbookActivities.length === 0) {
+        } else if (!hasRetrievedActs && !hasPageRange) {
           kbWarningBox.hidden = false;
           kbWarningText.textContent = `⚠️ لم يتم العثور على أنشطة موثقة لهذا الدرس في بنك المعرفة الحالي. ولا يجوز اختلاق نصوص أو أرقام صفحات.`;
         } else {
@@ -2220,9 +2236,12 @@ ${subjectRules}
     </tbody>
   </table>
 </div>
-\`\`\`
-
-اكتب الآن الجذاذة البيداغوجية الرسمية بالعربية الصافية، ملتزماً حرفاً بحرف بنصوص كتاب التلميذ في جميع المراحل، وابدأ فوراً بـ \`<div class="official-admin-block">\``;
+اكتب الآن الجذاذة البيداغوجية الرسمية بالعربية الصافية، ملتزماً حرفاً بحرف بنصوص كتاب التلميذ في جميع المراحل.
+أخرج محتوى الجذاذة حصرياً بين العلامتين التاليين دون أي مقدمة أو كلام خارجي:
+[BEGIN_LESSON_SHEET]
+<div class="tunisian-fiche-banner">...</div>
+...
+[END_LESSON_SHEET]`;
 }
 
 
@@ -2542,12 +2561,58 @@ function validateGeneratedReferences(fullText, metadata) {
   };
 }
 
+// ── PROMPT & META-INSTRUCTION STRIPPER ───────────────────
+function cleanRawPromptInstructions(rawText) {
+  if (!rawText) return "";
+  let text = rawText;
+
+  // 1. Extract strictly between delimiters if present
+  if (text.includes("[BEGIN_LESSON_SHEET]")) {
+    const parts = text.split("[BEGIN_LESSON_SHEET]");
+    text = parts[parts.length - 1];
+    if (text.includes("[END_LESSON_SHEET]")) {
+      text = text.split("[END_LESSON_SHEET]")[0];
+    }
+  }
+
+  // 2. Crop any text preceding the first actual pedagogical HTML container
+  const firstHtmlMatch = text.match(/<(?:div|section|table)\s+class=["'](?:tunisian-fiche-banner|official-admin-block|poster-hero-banner|timing-plan-box|mindmap-)/i);
+  if (firstHtmlMatch && firstHtmlMatch.index > 0) {
+    text = text.slice(firstHtmlMatch.index);
+  }
+
+  // 3. Strip any stray internal prompt phrases/instructions
+  const forbiddenPhrases = [
+    /General Inspector of Education[^\n]*/gi,
+    /Strict adherence[^\n]*/gi,
+    /No invention[^\n]*/gi,
+    /No addition[^\n]*/gi,
+    /No subtraction[^\n]*/gi,
+    /Use LaTeX for all math[^\n]*/gi,
+    /A specific HTML structure[^\n]*/gi,
+    /Check:\s*Did I include[^\n]*/gi,
+    /Self-Correction during drafting[^\n]*/gi,
+    /Final Polish of the HTML\/CSS[^\n]*/gi,
+    /System prompt[^\n]*/gi,
+    /Prompt[^\n]*/gi,
+    /\[BEGIN_LESSON_SHEET\]/gi,
+    /\[END_LESSON_SHEET\]/gi
+  ];
+
+  forbiddenPhrases.forEach(regex => {
+    text = text.replace(regex, "");
+  });
+
+  return text.trim();
+}
+
 // ── ROBUST KATEX MATH PREPROCESSOR (LTR ISOLATED) ──────────
 function renderMarkdownAndMath(text, metadata = {}) {
   let mathTokens = [];
+  const cleanedText = cleanRawPromptInstructions(text);
 
   // Step 1: Protect Block Math ($$...$$ or \[...\])
-  let safe = text.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\])/g, (m) => {
+  let safe = cleanedText.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\])/g, (m) => {
     const raw = m.startsWith("$$") ? m.slice(2, -2) : m.slice(2, -2);
     const id  = `%%MATH_BLOCK_${mathTokens.length}%%`;
     mathTokens.push({ id, raw: sanitizeKaTeXMathString(raw), display: true });
