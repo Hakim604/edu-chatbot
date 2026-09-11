@@ -1609,7 +1609,7 @@ ${bookContext}
 
 --- بنية الخريطة الذهنية التعليمية العصرية (HTML/CSS):
 
-```html
+\`\`\`html
 <div class="mindmap-radial-container mindmap-radial-layout mindmap-v2">
 
   <!-- 🎨 وصلات SVG البصرية للفروع -->
@@ -2731,8 +2731,8 @@ async function generateExerciseVariant() {
   const lesson = lessonTitle.value.trim() || "الدرس";
   showToast(currentCycle === "lycee" ? "⏳ Génération d'une variante d'exercice..." : "⏳ جاري توليد تمرين موازٍ بأعداد جديدة مع الحفاظ على نفس الهدف البيداغوجي...");
   setLoading(true);
-
-  const isFr = (currentLang === "fr");
+  try {
+    const isFr = (currentLang === "fr");
   const isEn = (currentLang === "en");
 
   const prompt = isFr
