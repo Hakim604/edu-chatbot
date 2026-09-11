@@ -874,16 +874,73 @@ function setActiveBook(book) {
   updateBookStatsUI(book);
 }
 
-function getSelectedBookContext() {
-  if (!currentBook || !currentBook.pages) return "";
+async function getSelectedBookContext() {
+  if (!currentBook) return "";
   const from = parseInt(pageFrom.value, 10);
   const to   = parseInt(pageTo.value, 10);
-  let pages = currentBook.pages;
-  if (!isNaN(from) && !isNaN(to) && from <= to) pages = pages.filter((p) => p.pageNum >= from && p.pageNum <= to);
-  else if (!isNaN(from)) pages = pages.filter((p) => p.pageNum >= from);
-  let text = pages.map((p) => `[صفحة ${p.pageNum}]:\n${p.text}`).join("\n\n");
-  if (text.length > 20000) text = text.substring(0, 20000) + "\n...[اقتطاع]...";
-  return `\n\n=== 📖 الكتاب المدرسي التونسي المرفق (${currentBook.title}) ===\n${text}\n=========================================\n`;
+
+  // Phase 12 Input Validations
+  if (!isNaN(from) && !isNaN(to) && from > to) {
+    throw new Error(`خطأ: بداية رقم الصفحة (${from}) لا يمكن أن تكون أكبر من نهايتها (${to}).`);
+  }
+
+  let text = "";
+  let retrievedCount = 0;
+  let targetPagesStr = "";
+
+  if (!isNaN(from)) {
+    const end = !isNaN(to) ? to : from;
+    targetPagesStr = (from === end) ? `الصفحة ${from}` : `الصفحات من ${from} إلى ${end}`;
+
+    // Try structured page retrieval via KnowledgeRetriever
+    if (window.KnowledgeRetriever && window.KnowledgeRetriever.searchTextbookByPages) {
+      try {
+        const pRes = await window.KnowledgeRetriever.searchTextbookByPages({
+          startPage: from,
+          endPage: end,
+          level: levelSelect.value,
+          subject: subjectSelect.value,
+          textbookId: currentBook.id
+        });
+        if (pRes && pRes.hasContent) {
+          text = pRes.combinedText;
+          retrievedCount = pRes.totalRetrievedPages;
+        }
+      } catch (e) {
+        console.warn("KnowledgeRetriever page search error:", e);
+      }
+    }
+
+    // Fallback to memory pages array if DB retrieval returned empty
+    if (!text && currentBook.pages) {
+      let pages = currentBook.pages;
+      pages = pages.filter((p) => {
+        const pNum = Number(p.pageNum || p.pageNumber);
+        return !isNaN(pNum) && pNum >= from && pNum <= end;
+      });
+      if (pages.length > 0) {
+        text = pages.map((p) => `--- [الكتاب المدرسي — الصفحة ${p.pageNum || p.pageNumber}]: ---\n${p.text || p.content}`).join("\n\n");
+        retrievedCount = pages.length;
+      }
+    }
+
+    if (!text || text.trim().length === 0) {
+      console.warn(`تحذير: تعذر استخراج نص الصفحات المحددة (${targetPagesStr}).`);
+    }
+  } else if (currentBook.pages) {
+    let pages = currentBook.pages;
+    text = pages.map((p) => `--- [الكتاب المدرسي — الصفحة ${p.pageNum || p.pageNumber}]: ---\n${p.text || p.content}`).join("\n\n");
+    retrievedCount = pages.length;
+  }
+
+  if (text.length > 25000) {
+    text = text.substring(0, 25000) + "\n...[تم اقتطاع باقي الصفحات للحفاظ على كفاءة التوليد]...";
+  }
+
+  return `\n\n=== 📖 محتوى الكتاب المدرسي الرسمي المعتمد (${currentBook.title}) ===
+${targetPagesStr ? `أرقام الصفحات المعتمدة صراحة من الأستاذ: [${targetPagesStr}]\n` : ''}
+${text ? text : `⚠️ تعذر استخراج نص الصفحات المحددة. لا تختلق أرقام صفحات أو أنشطة غير موجودة.`}
+=========================================\n`;
 }
 
 // ── ARCHIVE ─────────────────────────────────────────────────
@@ -1047,7 +1104,13 @@ async function handleGenerate() {
 
   const levelLabel   = CURRICULUM.getLevelLabel(levelId);
   const subjectLabel = CURRICULUM.getSubjects(currentCycle).find((s) => s.id === subjectId)?.label || subjectId;
-  const bookContext  = getSelectedBookContext();
+  let bookContext = "";
+  try {
+    bookContext = await getSelectedBookContext();
+  } catch (err) {
+    showError(err.message || "❌ خطأ في تحديد أرقام صفحات الكتاب المدرسي.");
+    return;
+  }
 
   bannerTeacherName.textContent  = teacherName;
   bannerSchoolName.textContent   = schoolName;

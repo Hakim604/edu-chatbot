@@ -294,6 +294,51 @@ async function saveTextbookActivitiesDB(activities) {
   return saved;
 }
 
+async function saveTextbookPagesDB(pages) {
+  if (!Array.isArray(pages)) return [];
+  const saved = [];
+  for (const p of pages) {
+    const item = {
+      id: p.id || `page_${p.bookId || p.textbookId || 'tb'}_p${p.pageNum || p.pageNumber}`,
+      bookId: String(p.bookId || p.textbookId || ''),
+      textbookId: String(p.textbookId || p.bookId || ''),
+      pageNum: Number(p.pageNum || p.pageNumber),
+      pageNumber: Number(p.pageNumber || p.pageNum),
+      level: p.level || '',
+      subject: p.subject || '',
+      title: p.title || '',
+      text: p.text || p.content || p.rawText || '',
+      content: p.content || p.text || p.rawText || '',
+      sections: p.sections || [],
+      activities: p.activities || [],
+      rules: p.rules || [],
+      examples: p.examples || [],
+      exercises: p.exercises || [],
+      concepts: p.concepts || [],
+      keywords: p.keywords || [],
+      createdAt: p.createdAt || new Date().toISOString()
+    };
+    await putItem(STORE_TEXTBOOK_PAGES, item);
+    saved.push(item);
+  }
+  return saved;
+}
+
+async function getTextbookPagesDB(startPage, endPage, level, subject) {
+  const all = await getAllItems(STORE_TEXTBOOK_PAGES);
+  const start = Number(startPage) || 1;
+  const end = Number(endPage) || start;
+  
+  return all.filter(p => {
+    const pNum = Number(p.pageNum || p.pageNumber);
+    if (isNaN(pNum)) return false;
+    if (pNum < start || pNum > end) return false;
+    if (level && p.level && _normLvl(p.level) !== _normLvl(level) && p.level !== level) return false;
+    if (subject && p.subject && String(p.subject).toLowerCase() !== String(subject).toLowerCase() && !p.subject.includes(subject)) return false;
+    return true;
+  }).sort((a, b) => Number(a.pageNum || a.pageNumber) - Number(b.pageNum || b.pageNumber));
+}
+
 async function getTextbookActivitiesDB(level, subject) {
   const all = await getAllItems(STORE_TEXTBOOK_ACTIVITIES);
   return all.filter(a => {
@@ -567,6 +612,8 @@ const PDFManager = {
   getGeneratedContentDB,
   saveTextbookActivitiesDB,
   getTextbookActivitiesDB,
+  saveTextbookPagesDB,
+  getTextbookPagesDB,
   deleteTextbookDataDB,
   extractTextFromPDF,
   normalizeExtractedMathText,

@@ -183,6 +183,84 @@
   }
 
   /**
+   * Phase 11: Real Page Range Retriever — Retrieves exact content from startPage to endPage
+   */
+  async function getTextbookPages(startPage, endPage, level, subject, textbookId) {
+    const start = Number(startPage) || 1;
+    const end = Number(endPage) || start;
+
+    if (start > end) {
+      throw new Error("بداية الصفحة لا يمكن أن تكون أكبر من نهايتها.");
+    }
+
+    let pages = [];
+    if (PDF && PDF.getTextbookPagesDB) {
+      try {
+        pages = await PDF.getTextbookPagesDB(start, end, level, subject);
+      } catch (e) {
+        pages = [];
+      }
+    }
+
+    // Fallback: search indexed activities bounded by page range if explicit page store is empty
+    if ((!pages || pages.length === 0) && PDF && PDF.getTextbookActivitiesDB) {
+      try {
+        const activities = await PDF.getTextbookActivitiesDB(level, subject);
+        const inRange = activities.filter(a => {
+          const p = Number(a.page || a.pageNumber);
+          return !isNaN(p) && p >= start && p <= end;
+        });
+
+        // Group by page number
+        const pageMap = new Map();
+        for (let pNum = start; pNum <= end; pNum++) {
+          const pageActs = inRange.filter(a => Number(a.page || a.pageNumber) === pNum);
+          if (pageActs.length > 0) {
+            pageMap.set(pNum, {
+              pageNum: pNum,
+              pageNumber: pNum,
+              level: level || pageActs[0].level,
+              subject: subject || pageActs[0].subject,
+              title: pageActs[0].lesson || pageActs[0].title || `الصفحة ${pNum}`,
+              text: pageActs.map(a => `[${a.type || 'نشاط'}]: ${a.title}\n${a.content}`).join('\n\n'),
+              content: pageActs.map(a => `[${a.type || 'نشاط'}]: ${a.title}\n${a.content}`).join('\n\n'),
+              activities: pageActs.filter(a => a.type === 'activity'),
+              rules: pageActs.filter(a => a.type === 'rule'),
+              exercises: pageActs.filter(a => a.type === 'exercise'),
+              verified: true
+            });
+          }
+        }
+        pages = Array.from(pageMap.values());
+      } catch (e) {
+        pages = [];
+      }
+    }
+
+    return pages;
+  }
+
+  /**
+   * Phase 11: Structured Page Range Search API
+   */
+  async function searchTextbookByPages({ startPage, endPage, level, subject, textbookId }) {
+    const pages = await getTextbookPages(startPage, endPage, level, subject, textbookId);
+    const start = Number(startPage) || 1;
+    const end = Number(endPage) || start;
+
+    const hasContent = pages.length > 0 && pages.some(p => (p.text || p.content || '').trim().length > 0);
+
+    return {
+      startPage: start,
+      endPage: end,
+      totalRetrievedPages: pages.length,
+      hasContent,
+      pages,
+      combinedText: pages.map(p => `--- [الكتاب المدرسي — الصفحة ${p.pageNum || p.pageNumber}]: ---\n${p.text || p.content}`).join('\n\n')
+    };
+  }
+
+  /**
    * Context window optimizer for Gemini Prompting.
    * Pulls top-K relevant chunks, avoiding full PDF dumps.
    */
@@ -447,6 +525,8 @@
     searchKnowledge,
     buildKnowledgeContext,
     searchTextbook,
-    getTopRelevantChunks
+    getTopRelevantChunks,
+    getTextbookPages,
+    searchTextbookByPages
   };
 }));
