@@ -1033,10 +1033,17 @@ async function getSelectedBookContext() {
   if (!currentBook) return "";
   const from = parseInt(pageFrom.value, 10);
   const to   = parseInt(pageTo.value, 10);
+  const totalPages = currentBook.numPages || currentBook.totalPages || 500;
 
-  // Phase 12 Input Validations
+  // Phase 12 & 18.1 Input Validations
   if (!isNaN(from) && !isNaN(to) && from > to) {
     throw new Error(`خطأ: بداية رقم الصفحة (${from}) لا يمكن أن تكون أكبر من نهايتها (${to}).`);
+  }
+  if (!isNaN(from) && from > totalPages) {
+    throw new Error(`خطأ: بداية الصفحة المحددة (${from}) تتجاوز إجمالي صفحات الكتاب (${totalPages}).`);
+  }
+  if (!isNaN(to) && to > totalPages) {
+    throw new Error(`خطأ: نهاية الصفحة المحددة (${to}) تتجاوز إجمالي صفحات الكتاب (${totalPages}).`);
   }
 
   let text = "";
@@ -1234,11 +1241,30 @@ async function handleGenerate() {
         return; // STOP! No loading state set, no view changed, no Gemini request!
       }
 
+      const totalPages = currentBook.numPages || currentBook.totalPages || 500;
       const fromVal = parseInt(pageFrom ? pageFrom.value : "", 10);
       const toVal   = parseInt(pageTo   ? pageTo.value   : "", 10);
-      const hasPageRange = !isNaN(fromVal) && fromVal > 0;
-      const startVal = hasPageRange ? fromVal : 1;
-      const endVal   = (!isNaN(toVal) && toVal >= startVal) ? toVal : (hasPageRange ? startVal : 500);
+      const hasFrom = !isNaN(fromVal) && fromVal >= 1;
+      const hasTo   = !isNaN(toVal) && toVal >= 1;
+
+      if (hasFrom && hasTo) {
+        if (fromVal > toVal) {
+          showError(`⚠️ خطأ في نطاق الصفحات: بداية الصفحة (${fromVal}) أكبر من نهايتها (${toVal}).`);
+          return;
+        }
+        if (toVal > totalPages) {
+          showError(`⚠️ خطأ في نطاق الصفحات: نهاية الصفحة (${toVal}) تتجاوز إجمالي صفحات الكتاب (${totalPages}).`);
+          return;
+        }
+      } else if (hasFrom && !hasTo) {
+        if (fromVal > totalPages) {
+          showError(`⚠️ خطأ في نطاق الصفحات: رقم الصفحة (${fromVal}) يتجاوز إجمالي صفحات الكتاب (${totalPages}).`);
+          return;
+        }
+      }
+
+      const startVal = hasFrom ? fromVal : 1;
+      const endVal   = (hasFrom && hasTo) ? toVal : (hasFrom ? fromVal : totalPages);
 
       let hasIndexedPages = false;
       if (window.PDFManager && window.PDFManager.getTextbookPagesDB) {
@@ -1249,10 +1275,12 @@ async function handleGenerate() {
         } catch (gateErr) {
           console.warn("[TEXTBOOK GATE ERROR]", gateErr);
         }
+      } else if (currentBook.pages && currentBook.pages.length > 0) {
+        hasIndexedPages = true;
       }
 
       if (!hasIndexedPages) {
-        showError("⚠️ يرجى رفع وفهرسة الكتاب المدرسي أولاً قبل إنشاء الجذاذة.");
+        showError(`⚠️ يرجى رفع وفهرسة الكتاب المدرسي أولاً، أو التأكد من توفر الصفحات المحددة (${startVal}-${endVal}) في الكتاب المدرسي.`);
         return; // STOP! No loading state set, no view changed, no Gemini request!
       }
     }
