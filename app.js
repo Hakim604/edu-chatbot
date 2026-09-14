@@ -432,16 +432,33 @@ async function updateKnowledgeSourcesCard() {
       const fromP = parseInt(pageFrom ? pageFrom.value : "", 10);
       const toP   = parseInt(pageTo ? pageTo.value : "", 10);
       const hasPageRange = !isNaN(fromP) && fromP > 0;
-      const hasRetrievedActs = searchRes.textbookActivities && searchRes.textbookActivities.length > 0;
 
-      if (hasPageRange || hasRetrievedActs) {
-        const pages = [...new Set((searchRes.textbookActivities || []).map(a => a.page).filter(Boolean))];
+      let hasIndexedPages = false;
+      let dbPagesCount = 0;
+      if (currentBook && window.PDFManager && window.PDFManager.getTextbookPagesDB) {
+        try {
+          const dbPages = await window.PDFManager.getTextbookPagesDB(1, 9999);
+          const bookPages = dbPages.filter(p => !p.textbookId || String(p.textbookId) === String(currentBook.id));
+          dbPagesCount = bookPages.length;
+          if (hasPageRange) {
+            const endP = !isNaN(toP) ? toP : fromP;
+            const rangePages = bookPages.filter(p => p.pageNum >= fromP && p.pageNum <= endP);
+            hasIndexedPages = rangePages.length > 0;
+          } else {
+            hasIndexedPages = dbPagesCount > 0;
+          }
+        } catch (dbErr) {
+          console.warn("[TEXTBOOK] Error checking IndexedDB pages:", dbErr);
+        }
+      }
+
+      if (hasIndexedPages) {
         let pagesText = "";
         if (hasPageRange) {
           const endP = !isNaN(toP) ? toP : fromP;
           pagesText = (fromP === endP) ? `ص ${fromP}` : `ص ${fromP}–${endP}`;
-        } else if (pages.length > 0) {
-          pagesText = `ص ${pages.join(', ')}`;
+        } else {
+          pagesText = `(${dbPagesCount} صفحة مفهرسة)`;
         }
 
         kbTextbookStatus.innerHTML = `<span style="color:#15803d; font-weight:600;">🟢 مرفق ومفهرس (${currentBook ? currentBook.title : 'CNP'} ${pagesText})</span>`;
@@ -792,6 +809,7 @@ async function handlePDFFile(file) {
   pdfProgressBox.hidden = false;
   pdfProgressBar.style.width = "0%";
   pdfProgressText.textContent = "جاري قراءة ملف الـ PDF...";
+  console.log("[TEXTBOOK] file selected:", file.name, `(${file.size} bytes)`);
   try {
     const arrayBuffer = await file.arrayBuffer();
     const { numPages, pages, fullText } = await window.PDFManager.extractTextFromPDF(
@@ -802,6 +820,8 @@ async function handlePDFFile(file) {
         pdfProgressText.textContent = `جاري الاستخراج... صفحة ${cur} من ${total} (${pct}%)`;
       }
     );
+    console.log("[TEXTBOOK] PDF loaded, pages extracted:", numPages);
+
     const bookObj = {
       id: `book_${Date.now()}`, title: file.name.replace(/\.pdf$/i, ""),
       numPages, pages, fullText, uploadedAt: new Date().toISOString()
@@ -810,20 +830,42 @@ async function handlePDFFile(file) {
 
     // Auto-Index Textbook for Phase 3
     if (window.TextbookIndexer && window.TextbookIndexer.indexTextbook) {
+      console.log("[TEXTBOOK] indexing started...");
       pdfProgressText.textContent = "جاري البناء والفهرسة البيداغوجية لقاعدة المعرفة...";
       await window.TextbookIndexer.indexTextbook(bookObj, {
         level: levelSelect ? levelSelect.value : '',
         subject: subjectSelect ? subjectSelect.value : '',
         title: bookObj.title
       });
+      console.log("[TEXTBOOK] indexing completed.");
+    }
+
+    // Save page records directly to IndexedDB store 'textbook_pages'
+    if (window.PDFManager && window.PDFManager.saveTextbookPagesDB) {
+      const pageObjs = pages.map(p => ({
+        textbookId: bookObj.id,
+        bookId: bookObj.id,
+        pageNum: p.pageNum,
+        pageNumber: p.pageNum,
+        level: levelSelect ? levelSelect.value : '',
+        subject: subjectSelect ? subjectSelect.value : '',
+        text: p.text,
+        content: p.text
+      }));
+      await window.PDFManager.saveTextbookPagesDB(pageObjs);
+      console.log("[TEXTBOOK] IndexedDB records verified:", pageObjs.length, "pages");
     }
 
     await loadSavedBooksList();
     savedBooksSelect.value = bookObj.id;
     setActiveBook(bookObj);
+    console.log("[TEXTBOOK] textbook status = indexed");
+    await updateKnowledgeSourcesCard();
+    console.log("[TEXTBOOK] knowledge card updated");
+
     showToast(`✅ تم حفظ وفهرسة الكتاب بنجاح (${numPages} صفحة)`);
   } catch (err) {
-    console.error(err);
+    console.error("[TEXTBOOK ERROR]", err);
     showError(`❌ فشل في قراءة ملف PDF: ${err.message}`);
   } finally {
     pdfProgressBox.hidden = true;
@@ -1124,9 +1166,7 @@ async function handleGenerate() {
   const levelLabel   = CURRICULUM.getLevelLabel(levelId);
   const subjectLabel = CURRICULUM.getSubjects(currentCycle).find((s) => s.id === subjectId)?.label || subjectId;
 
-  // ── PHASE 14 FIX: PDF Gate ───────────────────────────────────────────────
-  // If a page range is specified, the textbook MUST be indexed in IndexedDB.
-  // Generation is BLOCKED if IndexedDB has no pages — TEXTBOOK_CATALOG is NOT a valid substitute.
+  // ── PHASE 14 FIX: PDF Gate (MUST EXECUTE BEFORE ANY UI STATE CHANGE) ──
   {
     const fromVal = parseInt(pageFrom ? pageFrom.value : "", 10);
     const toVal   = parseInt(pageTo   ? pageTo.value   : "", 10);
@@ -1134,19 +1174,20 @@ async function handleGenerate() {
 
     if (hasPageRange && currentMode === "fiche") {
       let hasIndexedPages = false;
-      try {
-        if (window.PDFManager && window.PDFManager.getTextbookPagesDB) {
+      if (currentBook && window.PDFManager && window.PDFManager.getTextbookPagesDB) {
+        try {
           const endVal = !isNaN(toVal) ? toVal : fromVal;
           const dbPages = await window.PDFManager.getTextbookPagesDB(fromVal, endVal);
-          hasIndexedPages = Array.isArray(dbPages) && dbPages.length > 0;
+          const bookPages = dbPages.filter(p => !p.textbookId || String(p.textbookId) === String(currentBook.id));
+          hasIndexedPages = Array.isArray(bookPages) && bookPages.length > 0;
+        } catch (gateErr) {
+          console.warn("[TEXTBOOK GATE ERROR]", gateErr);
         }
-      } catch (gateErr) {
-        console.warn("PDF Gate check error:", gateErr);
       }
 
       if (!hasIndexedPages) {
         showError("⚠️ يرجى إرفاق الكتاب المدرسي وفهرسته أولًا قبل إنشاء الجذاذة.\n\nحدد نطاق الصفحات (من – إلى)، ثم ارفع ملف PDF وانتظر اكتمال الفهرسة (🟢) قبل الضغط على «توليد».");
-        return;
+        return; // STOP! No loading state set, no view changed, no Gemini request!
       }
     }
   }

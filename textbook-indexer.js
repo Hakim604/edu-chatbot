@@ -343,8 +343,13 @@
     flushCurrentItem();
 
     // Save Page Records and Segmented Items to IndexedDB
+    if (PDF && PDF.saveTextbookPagesDB) {
+      await PDF.saveTextbookPagesDB(pageRecords);
+      console.log(`[TEXTBOOK] Saved ${pageRecords.length} page records to IndexedDB store 'textbook_pages'`);
+    }
     if (PDF && PDF.saveTextbookActivitiesDB) {
       await PDF.saveTextbookActivitiesDB(allSegmentedItems);
+      console.log(`[TEXTBOOK] Saved ${allSegmentedItems.length} segmented items to IndexedDB store 'textbook_activities'`);
     }
 
     const isFull = (pageRecords.length === extractedPDF.pages.length) && !docMeta.failedPages && docMeta.failedPages !== 0 ? true : (!docMeta.failedPages && pageRecords.length === extractedPDF.pages.length);
