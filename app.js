@@ -477,6 +477,7 @@ async function updateKnowledgeSourcesCard() {
       kbSearchStatus.textContent = "تم استرجاع المعطيات بنجاح";
 
       // 4. Warning Box logic (Hidden when textbook pages/content is retrieved)
+      const hasRetrievedActs = (searchRes.activities || []).length > 0;
       if (kbWarningBox) {
         if (!searchRes.official && !hasPageRange && !hasRetrievedActs) {
           kbWarningBox.hidden = false;
