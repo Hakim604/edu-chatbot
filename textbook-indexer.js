@@ -224,6 +224,10 @@
    * Main Textbook Indexer Pipeline: indexes pages & items, updates IndexedDB
    */
   async function indexTextbook(extractedPDF, docMeta = {}) {
+    const textbookId = docMeta.id || docMeta.textbookId || (extractedPDF && (extractedPDF.id || extractedPDF.textbookId)) || `tb_${Date.now()}`;
+    docMeta.id = textbookId;
+    docMeta.textbookId = textbookId;
+
     let targetPages = [];
     if (Array.isArray(extractedPDF)) {
       targetPages = extractedPDF;
@@ -244,10 +248,6 @@
     if (!Array.isArray(targetPages) || targetPages.length === 0) {
       throw new Error("بيانات PDF غير صالحة أو لا تحتوي على صفحات.");
     }
-
-    const textbookId = docMeta.id || docMeta.textbookId || extractedPDF.id || extractedPDF.textbookId || `tb_${Date.now()}`;
-    docMeta.id = textbookId;
-    docMeta.textbookId = textbookId;
 
     const pageRecords = [];
     const allSegmentedItems = [];
