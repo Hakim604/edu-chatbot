@@ -397,20 +397,63 @@ async function deleteTextbookDataDB(textbookId) {
     return true;
   }
 
-  const allActs = await getAllItems(STORE_TEXTBOOK_ACTIVITIES);
-  for (const act of allActs) {
-    if (String(act.textbookId || act.bookId) === targetId) {
-      await deleteItemById(STORE_TEXTBOOK_ACTIVITIES, act.id);
+  return new Promise((resolve, reject) => {
+    const storesToClean = [STORE_BOOKS, STORE_TEXTBOOK_PAGES, STORE_TEXTBOOK_ACTIVITIES];
+    if (db.objectStoreNames.contains(STORE_SOURCE_METADATA)) storesToClean.push(STORE_SOURCE_METADATA);
+
+    const tx = db.transaction(storesToClean, "readwrite");
+
+    // 1. Delete matching page records
+    const pagesStore = tx.objectStore(STORE_TEXTBOOK_PAGES);
+    const pagesReq = pagesStore.getAll();
+    pagesReq.onsuccess = () => {
+      (pagesReq.result || []).forEach(p => {
+        if (String(p.textbookId || p.bookId || '') === targetId) {
+          pagesStore.delete(p.id);
+        }
+      });
+    };
+
+    // 2. Delete matching activity records
+    const actsStore = tx.objectStore(STORE_TEXTBOOK_ACTIVITIES);
+    const actsReq = actsStore.getAll();
+    actsReq.onsuccess = () => {
+      (actsReq.result || []).forEach(a => {
+        if (String(a.textbookId || a.bookId || '') === targetId) {
+          actsStore.delete(a.id);
+        }
+      });
+    };
+
+    // 3. Delete matching book record
+    const booksStore = tx.objectStore(STORE_BOOKS);
+    const booksReq = booksStore.getAll();
+    booksReq.onsuccess = () => {
+      (booksReq.result || []).forEach(b => {
+        if (String(b.id || b.textbookId || '') === targetId) {
+          booksStore.delete(b.id);
+        }
+      });
+    };
+
+    // 4. Delete source metadata entry if present
+    if (db.objectStoreNames.contains(STORE_SOURCE_METADATA)) {
+      tx.objectStore(STORE_SOURCE_METADATA).delete(targetId);
     }
-  }
-  const allPages = await getAllItems(STORE_TEXTBOOK_PAGES);
-  for (const p of allPages) {
-    if (String(p.textbookId || p.bookId) === targetId) {
-      await deleteItemById(STORE_TEXTBOOK_PAGES, p.id);
-    }
-  }
-  await deleteItemById(STORE_BOOKS, targetId);
-  return true;
+
+    tx.oncomplete = () => {
+      console.log(`[INDEXEDDB] Atomically deleted textbook '${targetId}' and all associated pages & activities.`);
+      resolve(true);
+    };
+    tx.onerror = (e) => {
+      console.error(`[INDEXEDDB ERROR] Atomic delete for '${targetId}' failed:`, tx.error || e);
+      reject(tx.error || e);
+    };
+    tx.onabort = (e) => {
+      console.error(`[INDEXEDDB ABORT] Atomic delete for '${targetId}' aborted:`, tx.error || e);
+      reject(tx.error || new Error("Transaction aborted"));
+    };
+  });
 }
 
 // ── MATHEMATICAL & BIDI TEXT NORMALIZER ─────────────────────

@@ -760,20 +760,48 @@ function initPDFEvents() {
 
   btnDeleteBook.addEventListener("click", async () => {
     if (!currentBook) return;
-    if (confirm(`هل أنت متأكد من مسح الكتاب المرفق: "${currentBook.title}"؟`)) {
-      if (window.TextbookIndexer && window.TextbookIndexer.deleteTextbookData) {
-        await window.TextbookIndexer.deleteTextbookData(currentBook.id);
-      } else {
-        await window.PDFManager.deleteBookFromDB(currentBook.id);
+    const targetBookId = currentBook.id;
+    const targetBookTitle = currentBook.title || "الكتاب المدرسي";
+    if (confirm(`هل أنت متأكد من مسح الكتاب المرفق: "${targetBookTitle}"؟`)) {
+      try {
+        console.log("[DELETE] Starting atomic deletion for textbook:", targetBookId);
+        if (window.TextbookIndexer && window.TextbookIndexer.deleteTextbookData) {
+          await window.TextbookIndexer.deleteTextbookData(targetBookId);
+        } else if (window.PDFManager && window.PDFManager.deleteTextbookDataDB) {
+          await window.PDFManager.deleteTextbookDataDB(targetBookId);
+        } else if (window.PDFManager && window.PDFManager.deleteBookFromDB) {
+          await window.PDFManager.deleteBookFromDB(targetBookId);
+        }
+
+        // Complete UI & State Cleanup
+        currentBook = null;
+        activeBookCard.hidden = true;
+        btnDeleteBook.hidden  = true;
+        if (savedBooksSelect) savedBooksSelect.value = "";
+        if (pageFrom) pageFrom.value = "";
+        if (pageTo)   pageTo.value = "";
+
+        // Reset Card UI Stats
+        const statPages = $("statPagesCount");
+        const statActs = $("statActsCount");
+        const statExs = $("statExsCount");
+        const bookStatusBadge = $("bookStatusBadge");
+        if (statPages) statPages.textContent = "📄 0/0 صفحة";
+        if (statActs)  statActs.textContent  = "📍 0 أنشطة";
+        if (statExs)   statExs.textContent   = "📝 0 تمارين";
+        if (bookStatusBadge) {
+          bookStatusBadge.className = "badge badge-danger";
+          bookStatusBadge.textContent = "🔴 غير مفهرس";
+        }
+
+        await loadSavedBooksList();
+        await updateKnowledgeSourcesCard();
+        console.log("[DELETE] Atomic deletion completed successfully.");
+        showToast("🗑️ تم مسح الكتاب المرفق وجميع سجلات الفهرسة نهائياً من التخزين المحلي");
+      } catch (err) {
+        console.error("[DELETE ERROR] Failed to delete textbook:", err);
+        showError(`❌ فشل في مسح الكتاب من التخزين المحرري: ${err.message}`);
       }
-      currentBook = null;
-      activeBookCard.hidden = true;
-      btnDeleteBook.hidden  = true;
-      if (pageFrom) pageFrom.value = "";
-      if (pageTo)   pageTo.value = "";
-      await loadSavedBooksList();
-      await updateKnowledgeSourcesCard();
-      showToast("🗑️ تم مسح الكتاب المرفق والبيانات المفهرسة بنجاح");
     }
   });
 
@@ -784,6 +812,15 @@ function initPDFEvents() {
       console.log("[INDEX] Re-indexing triggered for book:", currentBook.id, currentBook.title);
       showToast("🔄 جاري إعادة فهرسة الكتاب المدرسي...");
       try {
+        // Ensure currentBook has pages array loaded
+        if ((!currentBook.pages || currentBook.pages.length === 0) && window.PDFManager && window.PDFManager.getTextbookPagesDB) {
+          const dbPages = await window.PDFManager.getTextbookPagesDB(1, 9999);
+          const bookPages = dbPages.filter(p => String(p.textbookId || p.bookId) === String(currentBook.id));
+          if (bookPages.length > 0) {
+            currentBook.pages = bookPages;
+          }
+        }
+
         if (window.TextbookIndexer && window.TextbookIndexer.reindexTextbook) {
           await window.TextbookIndexer.reindexTextbook(currentBook.id, currentBook, {
             id: currentBook.id,
@@ -792,25 +829,11 @@ function initPDFEvents() {
             subject: subjectSelect ? subjectSelect.value : '',
             title: currentBook.title
           });
-
-          if (currentBook.pages && window.PDFManager && window.PDFManager.saveTextbookPagesDB) {
-            const pageObjs = currentBook.pages.map(p => ({
-              textbookId: currentBook.id,
-              bookId: currentBook.id,
-              pageNum: p.pageNum || p.pageNumber,
-              pageNumber: p.pageNum || p.pageNumber,
-              level: levelSelect ? levelSelect.value : '',
-              subject: subjectSelect ? subjectSelect.value : '',
-              text: p.text || p.content || ''
-            }));
-            await window.PDFManager.saveTextbookPagesDB(pageObjs);
-            console.log("[INDEX] Re-indexed page records saved to IndexedDB store 'textbook_pages':", pageObjs.length);
-          }
-
-          await updateBookStatsUI(currentBook);
-          await updateKnowledgeSourcesCard();
-          showToast("✅ تمت إعادة الفهرسة بنجاح!");
         }
+
+        await updateBookStatsUI(currentBook);
+        await updateKnowledgeSourcesCard();
+        showToast("✅ تمت إعادة الفهرسة بنجاح!");
       } catch (err) {
         console.error("[INDEX ERROR] Re-indexing failed:", err);
         showError(`❌ فشل في إعادة الفهرسة: ${err.message}`);

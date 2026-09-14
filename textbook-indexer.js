@@ -224,7 +224,24 @@
    * Main Textbook Indexer Pipeline: indexes pages & items, updates IndexedDB
    */
   async function indexTextbook(extractedPDF, docMeta = {}) {
-    if (!extractedPDF || !Array.isArray(extractedPDF.pages)) {
+    let targetPages = [];
+    if (Array.isArray(extractedPDF)) {
+      targetPages = extractedPDF;
+    } else if (extractedPDF && Array.isArray(extractedPDF.pages) && extractedPDF.pages.length > 0) {
+      targetPages = extractedPDF.pages;
+    } else if (extractedPDF && Array.isArray(extractedPDF.pagesList) && extractedPDF.pagesList.length > 0) {
+      targetPages = extractedPDF.pagesList;
+    } else if (extractedPDF && Array.isArray(extractedPDF.pageRecords) && extractedPDF.pageRecords.length > 0) {
+      targetPages = extractedPDF.pageRecords;
+    } else if (extractedPDF && PDF && PDF.getTextbookPagesDB) {
+      try {
+        const stored = await PDF.getTextbookPagesDB(1, 9999);
+        const bookPages = stored.filter(p => String(p.textbookId || p.bookId) === String(textbookId));
+        if (bookPages.length > 0) targetPages = bookPages;
+      } catch (e) {}
+    }
+
+    if (!Array.isArray(targetPages) || targetPages.length === 0) {
       throw new Error("بيانات PDF غير صالحة أو لا تحتوي على صفحات.");
     }
 
@@ -267,11 +284,13 @@
     let activeChapter = docMeta.chapter || '';
     let activeLesson = docMeta.lesson || '';
 
-    for (const p of extractedPDF.pages) {
-      const pageRec = buildPageRecord(textbookId, p.pageNum, p.text, docMeta);
+    for (const p of targetPages) {
+      const pNum = p.pageNum || p.pageNumber || (pageRecords.length + 1);
+      const pText = p.text || p.content || p.rawText || '';
+      const pageRec = buildPageRecord(textbookId, pNum, pText, docMeta);
       pageRecords.push(pageRec);
 
-      const lines = (p.text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const lines = pText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
       for (const line of lines) {
         let type = null;
@@ -312,12 +331,12 @@
         if (type) {
           flushCurrentItem();
           currentItem = {
-            id: `item_${textbookId}_p${p.pageNum}_${allSegmentedItems.length + 1}`,
+            id: `item_${textbookId}_p${pNum}_${allSegmentedItems.length + 1}`,
             textbookId,
-            pageNumber: p.pageNum,
-            pageStart: p.pageNum,
-            pageEnd: p.pageNum,
-            pages: [p.pageNum],
+            pageNumber: pNum,
+            pageStart: pNum,
+            pageEnd: pNum,
+            pages: [pNum],
             level: docMeta.level || '',
             subject: docMeta.subject || '',
             chapter: activeChapter,
@@ -335,9 +354,9 @@
         } else {
           if (currentItem) {
             currentItem.content += line + '\n';
-            currentItem.pageEnd = p.pageNum;
-            if (!currentItem.pages.includes(p.pageNum)) {
-              currentItem.pages.push(p.pageNum);
+            currentItem.pageEnd = pNum;
+            if (!currentItem.pages.includes(pNum)) {
+              currentItem.pages.push(pNum);
             }
           }
         }
@@ -345,7 +364,7 @@
     }
     flushCurrentItem();
 
-    console.log(`[INDEX] PDF pages count = ${extractedPDF.pages ? extractedPDF.pages.length : 0}`);
+    console.log(`[INDEX] PDF pages count = ${targetPages.length}`);
     console.log(`[INDEX] pageRecords count = ${pageRecords.length}`);
     if (pageRecords.length > 0) {
       console.log(`[INDEX] first page = ${pageRecords[0].pageNumber}`);
@@ -363,17 +382,17 @@
       console.log(`[INDEX] Saved ${allSegmentedItems.length} segmented items to IndexedDB store 'textbook_activities'`);
     }
 
-    const isFull = (pageRecords.length === extractedPDF.pages.length) && !docMeta.failedPages && docMeta.failedPages !== 0 ? true : (!docMeta.failedPages && pageRecords.length === extractedPDF.pages.length);
+    const isFull = (pageRecords.length === targetPages.length);
     const indexStats = {
       textbookId,
-      totalPages: extractedPDF.pages.length,
+      totalPages: targetPages.length,
       indexedPages: pageRecords.length,
       failedPages: docMeta.failedPages || 0,
       totalActivities,
       totalExercises,
       totalRules,
       totalUnclassified,
-      status: (pageRecords.length === extractedPDF.pages.length && !docMeta.failedPages) ? 'FULL' : 'PARTIAL',
+      status: isFull ? 'FULL' : 'PARTIAL',
       indexedAt: new Date().toISOString()
     };
 
@@ -393,6 +412,7 @@
       await PDF.deleteTextbookDataDB(textbookId);
     }
     docMeta.textbookId = textbookId;
+    docMeta.id = textbookId;
     return indexTextbook(extractedPDF, docMeta);
   }
 
