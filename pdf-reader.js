@@ -383,19 +383,26 @@ async function getTextbookActivitiesDB(level, subject) {
 async function deleteTextbookDataDB(textbookId) {
   if (!textbookId) return true;
   const targetId = String(textbookId);
-  const db = await openDB();
-  if (!db) {
+
+  // Clear memoryStores fallback
+  if (memoryStores[STORE_TEXTBOOK_ACTIVITIES]) {
     for (const [id, item] of memoryStores[STORE_TEXTBOOK_ACTIVITIES].entries()) {
       if (String(item.textbookId || item.bookId) === targetId) memoryStores[STORE_TEXTBOOK_ACTIVITIES].delete(id);
     }
+  }
+  if (memoryStores[STORE_TEXTBOOK_PAGES]) {
     for (const [id, item] of memoryStores[STORE_TEXTBOOK_PAGES].entries()) {
       if (String(item.textbookId || item.bookId) === targetId) memoryStores[STORE_TEXTBOOK_PAGES].delete(id);
     }
-    for (const [id, item] of memoryStores[STORE_BOOKS].entries()) {
-      if (String(item.id || item.textbookId) === targetId) memoryStores[STORE_BOOKS].delete(id);
-    }
-    return true;
   }
+  if (memoryStores[STORE_BOOKS]) {
+    for (const [id, item] of memoryStores[STORE_BOOKS].entries()) {
+      if (String(item.id || item.textbookId || id) === targetId) memoryStores[STORE_BOOKS].delete(id);
+    }
+  }
+
+  const db = await openDB();
+  if (!db) return true;
 
   return new Promise((resolve, reject) => {
     const storesToClean = [STORE_BOOKS, STORE_TEXTBOOK_PAGES, STORE_TEXTBOOK_ACTIVITIES];
@@ -425,8 +432,9 @@ async function deleteTextbookDataDB(textbookId) {
       });
     };
 
-    // 3. Delete matching book record
+    // 3. Delete matching book record explicitly by key and by search
     const booksStore = tx.objectStore(STORE_BOOKS);
+    booksStore.delete(targetId);
     const booksReq = booksStore.getAll();
     booksReq.onsuccess = () => {
       (booksReq.result || []).forEach(b => {

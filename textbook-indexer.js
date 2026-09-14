@@ -420,11 +420,10 @@
    * Deletes textbook pages and items from storage
    */
   async function deleteTextbookData(textbookId) {
-    if (PDF && PDF.deleteBookFromDB) {
-      await PDF.deleteBookFromDB(textbookId);
-    }
     if (PDF && PDF.deleteTextbookDataDB) {
       await PDF.deleteTextbookDataDB(textbookId);
+    } else if (PDF && PDF.deleteBookFromDB) {
+      await PDF.deleteBookFromDB(textbookId);
     }
     return true;
   }

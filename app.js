@@ -724,13 +724,53 @@ async function loadSavedBooksList() {
   try {
     const books = await window.PDFManager.getAllBooksFromDB();
     savedBooksSelect.innerHTML = '<option value="">-- لا يوجد كتاب محدد (أو ارفع كتاباً جديداً) --</option>';
-    books.forEach((b) => {
-      const opt = document.createElement("option");
-      opt.value = b.id;
-      opt.textContent = `📖 ${b.title} (${b.numPages} صفحة)`;
-      savedBooksSelect.appendChild(opt);
-    });
-  } catch (e) { console.warn("IndexedDB books note:", e); }
+
+    if (!Array.isArray(books) || books.length === 0) {
+      currentBook = null;
+      if (typeof activeBookCard !== 'undefined' && activeBookCard) activeBookCard.hidden = true;
+      if (typeof btnDeleteBook !== 'undefined' && btnDeleteBook) btnDeleteBook.hidden = true;
+      return;
+    }
+
+    let activeToRestore = null;
+
+    for (const b of books) {
+      // Verify book has indexed page records in store 'textbook_pages'
+      let dbPageCount = 0;
+      if (window.PDFManager && window.PDFManager.getTextbookPagesDB) {
+        const dbPages = await window.PDFManager.getTextbookPagesDB(1, 9999);
+        dbPageCount = dbPages.filter(p => !p.textbookId || String(p.textbookId) === String(b.id)).length;
+      }
+
+      const totalPages = b.numPages || (b.pages ? b.pages.length : dbPageCount);
+      const isIndexed = dbPageCount > 0 || (b.pages && b.pages.length > 0);
+
+      if (isIndexed) {
+        b.status = "indexed";
+        const opt = document.createElement("option");
+        opt.value = b.id;
+        opt.textContent = `📖 ${b.title} (${totalPages} صفحة) 🟢`;
+        savedBooksSelect.appendChild(opt);
+
+        if (currentBook && String(currentBook.id) === String(b.id)) {
+          activeToRestore = b;
+        } else if (!activeToRestore) {
+          activeToRestore = b;
+        }
+      }
+    }
+
+    if (activeToRestore) {
+      savedBooksSelect.value = activeToRestore.id;
+      setActiveBook(activeToRestore);
+    } else {
+      currentBook = null;
+      if (typeof activeBookCard !== 'undefined' && activeBookCard) activeBookCard.hidden = true;
+      if (typeof btnDeleteBook !== 'undefined' && btnDeleteBook) btnDeleteBook.hidden = true;
+    }
+  } catch (e) {
+    console.warn("IndexedDB books note:", e);
+  }
 }
 
 function initPDFEvents() {
@@ -755,7 +795,12 @@ function initPDFEvents() {
     if (!bookId) { currentBook = null; activeBookCard.hidden = true; btnDeleteBook.hidden = true; return; }
     try {
       const book = await window.PDFManager.getBookFromDB(bookId);
-      if (book) setActiveBook(book);
+      if (book) {
+        book.status = "indexed";
+        setActiveBook(book);
+        await updateBookStatsUI(book);
+        await updateKnowledgeSourcesCard();
+      }
     } catch (err) { showError("❌ تعذر استرجاع الكتاب المحفوظ."); }
   });
 
@@ -766,10 +811,10 @@ function initPDFEvents() {
     if (confirm(`هل أنت متأكد من مسح الكتاب المرفق: "${targetBookTitle}"؟`)) {
       try {
         console.log("[DELETE] Starting atomic deletion for textbook:", targetBookId);
-        if (window.TextbookIndexer && window.TextbookIndexer.deleteTextbookData) {
-          await window.TextbookIndexer.deleteTextbookData(targetBookId);
-        } else if (window.PDFManager && window.PDFManager.deleteTextbookDataDB) {
+        if (window.PDFManager && window.PDFManager.deleteTextbookDataDB) {
           await window.PDFManager.deleteTextbookDataDB(targetBookId);
+        } else if (window.TextbookIndexer && window.TextbookIndexer.deleteTextbookData) {
+          await window.TextbookIndexer.deleteTextbookData(targetBookId);
         } else if (window.PDFManager && window.PDFManager.deleteBookFromDB) {
           await window.PDFManager.deleteBookFromDB(targetBookId);
         }
