@@ -429,9 +429,9 @@ async function updateKnowledgeSourcesCard() {
       }
 
       // 2. Textbook Activities & Pages Range State
-      const fromP = parseInt(pageFrom.value, 10);
-      const toP   = parseInt(pageTo.value, 10);
-      const hasPageRange = !isNaN(fromP);
+      const fromP = parseInt(pageFrom ? pageFrom.value : "", 10);
+      const toP   = parseInt(pageTo ? pageTo.value : "", 10);
+      const hasPageRange = !isNaN(fromP) && fromP > 0;
       const hasRetrievedActs = searchRes.textbookActivities && searchRes.textbookActivities.length > 0;
 
       if (hasPageRange || hasRetrievedActs) {
@@ -444,13 +444,13 @@ async function updateKnowledgeSourcesCard() {
           pagesText = `ص ${pages.join(', ')}`;
         }
 
-        kbTextbookStatus.innerHTML = `<span style="color:#15803d; font-weight:600;">🟢 متوفر ومفهرس (CNP ${pagesText})</span>`;
+        kbTextbookStatus.innerHTML = `<span style="color:#15803d; font-weight:600;">🟢 مرفق ومفهرس (${currentBook ? currentBook.title : 'CNP'} ${pagesText})</span>`;
         if (kbWarningBox) kbWarningBox.hidden = true;
       } else if (currentBook) {
-        kbTextbookStatus.innerHTML = `<span style="color:#d97706; font-weight:600;">🟠 موجود — يحتاج تحديد أرقام الصفحات</span>`;
+        kbTextbookStatus.innerHTML = `<span style="color:#d97706; font-weight:600;">🟡 جارٍ الفهرسة / يحتاج تحديد أرقام الصفحات</span>`;
         if (kbWarningBox) kbWarningBox.hidden = true;
       } else {
-        kbTextbookStatus.innerHTML = '<span style="color:#64748b;">⚪ غير متوفر في الكتالوج الحالي</span>';
+        kbTextbookStatus.innerHTML = '<span style="color:#991b1b; font-weight:600;">🔴 غير مرفق (يرجى إرفاق الكتاب المدرسي أولاً)</span>';
       }
 
       // 3. Teacher Resources
@@ -743,7 +743,7 @@ function initPDFEvents() {
 
   btnDeleteBook.addEventListener("click", async () => {
     if (!currentBook) return;
-    if (confirm(`هل أنت متأكد من حذف: "${currentBook.title}"؟`)) {
+    if (confirm(`هل أنت متأكد من مسح الكتاب المرفق: "${currentBook.title}"؟`)) {
       if (window.TextbookIndexer && window.TextbookIndexer.deleteTextbookData) {
         await window.TextbookIndexer.deleteTextbookData(currentBook.id);
       } else {
@@ -752,8 +752,11 @@ function initPDFEvents() {
       currentBook = null;
       activeBookCard.hidden = true;
       btnDeleteBook.hidden  = true;
+      if (pageFrom) pageFrom.value = "";
+      if (pageTo)   pageTo.value = "";
       await loadSavedBooksList();
-      showToast("🗑️ تم حذف الكتاب والبيانات المفهرسة من الذاكرة");
+      await updateKnowledgeSourcesCard();
+      showToast("🗑️ تم مسح الكتاب المرفق والبيانات المفهرسة بنجاح");
     }
   });
 
@@ -1120,6 +1123,35 @@ async function handleGenerate() {
 
   const levelLabel   = CURRICULUM.getLevelLabel(levelId);
   const subjectLabel = CURRICULUM.getSubjects(currentCycle).find((s) => s.id === subjectId)?.label || subjectId;
+
+  // ── PHASE 14 FIX: PDF Gate ───────────────────────────────────────────────
+  // If a page range is specified, the textbook MUST be indexed in IndexedDB.
+  // Generation is BLOCKED if IndexedDB has no pages — TEXTBOOK_CATALOG is NOT a valid substitute.
+  {
+    const fromVal = parseInt(pageFrom ? pageFrom.value : "", 10);
+    const toVal   = parseInt(pageTo   ? pageTo.value   : "", 10);
+    const hasPageRange = !isNaN(fromVal) && fromVal > 0;
+
+    if (hasPageRange && currentMode === "fiche") {
+      let hasIndexedPages = false;
+      try {
+        if (window.PDFManager && window.PDFManager.getTextbookPagesDB) {
+          const endVal = !isNaN(toVal) ? toVal : fromVal;
+          const dbPages = await window.PDFManager.getTextbookPagesDB(fromVal, endVal);
+          hasIndexedPages = Array.isArray(dbPages) && dbPages.length > 0;
+        }
+      } catch (gateErr) {
+        console.warn("PDF Gate check error:", gateErr);
+      }
+
+      if (!hasIndexedPages) {
+        showError("⚠️ يرجى إرفاق الكتاب المدرسي وفهرسته أولًا قبل إنشاء الجذاذة.\n\nحدد نطاق الصفحات (من – إلى)، ثم ارفع ملف PDF وانتظر اكتمال الفهرسة (🟢) قبل الضغط على «توليد».");
+        return;
+      }
+    }
+  }
+  // ── END PDF GATE ─────────────────────────────────────────────────────────
+
   let bookContext = "";
   try {
     bookContext = await getSelectedBookContext();
@@ -2343,14 +2375,23 @@ async function generate(apiKey, prompt, metadata) {
 
       const reader  = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
-      let buffer = "", fullText = "";
+      let sseBuffer = "", fullText = "";
+
+      // ── PHASE 14 FIX: buffer-only streaming ─────────────────
+      // NOTHING is rendered to outputBody until [END_LESSON_SHEET] is confirmed.
+      // Show a progress indicator while streaming.
+      outputBody.innerHTML = `<div style="text-align:center;padding:2rem;color:#64748b;direction:rtl;">
+        <div style="font-size:2rem;margin-bottom:0.5rem;">⏳</div>
+        <p style="font-weight:600;">جاري توليد الجذاذة...</p>
+        <p style="font-size:0.85rem;">يرجى الانتظار حتى يكتمل التوليد.</p>
+      </div>`;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop();
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split("\n");
+        sseBuffer = lines.pop();
         for (const line of lines) {
           if (!line.startsWith("data: ")) continue;
           const jsonStr = line.slice(6).trim();
@@ -2359,16 +2400,45 @@ async function generate(apiKey, prompt, metadata) {
             const parsed = JSON.parse(jsonStr);
             const chunk  = parsed?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
             fullText += chunk;
-            outputBody.innerHTML = renderMarkdownAndMath(fullText, metadata);
+            // DO NOT render to outputBody here — buffer only
           } catch { /* ignore mid-stream parse errors */ }
         }
       }
+      // ── END PHASE 14 STREAMING BUFFER ───────────────────────
 
       if (!fullText.trim()) {
         throw new Error("لم يتم استلام أي محتوى من نموذج الذكاء الاصطناعي.");
       }
 
-      const finalHtml = renderMarkdownAndMath(fullText, metadata);
+      // ── PHASE 14: Extract ONLY content between delimiters ───
+      const BEGIN_MARKER = "[BEGIN_LESSON_SHEET]";
+      const END_MARKER   = "[END_LESSON_SHEET]";
+      const beginIdx = fullText.indexOf(BEGIN_MARKER);
+      const endIdx   = fullText.indexOf(END_MARKER);
+
+      let contentToRender;
+      if (beginIdx !== -1 && endIdx !== -1 && endIdx > beginIdx) {
+        // Happy path: delimiters found — extract only what's between them
+        contentToRender = fullText.slice(beginIdx + BEGIN_MARKER.length, endIdx).trim();
+      } else if (beginIdx !== -1) {
+        // BEGIN found but no END — take everything after BEGIN
+        contentToRender = fullText.slice(beginIdx + BEGIN_MARKER.length).trim();
+      } else {
+        // No delimiters at all: do NOT show raw prompt/response
+        // Attempt to find first HTML tag as fallback
+        const htmlTagIdx = fullText.indexOf("<div");
+        if (htmlTagIdx !== -1) {
+          contentToRender = fullText.slice(htmlTagIdx).trim();
+        } else {
+          outputBody.innerHTML = `<div style="background:#fef2f2;color:#991b1b;border:1px solid #f87171;padding:1rem 1.25rem;border-radius:8px;direction:rtl;font-weight:600;">
+            ⚠️ لم يتمكن النموذج من توليد جذاذة صحيحة. يرجى المحاولة مرة أخرى.
+          </div>`;
+          throw new Error("لم يتم العثور على العلامتين [BEGIN_LESSON_SHEET] / [END_LESSON_SHEET] في مخرجات النموذج.");
+        }
+      }
+      // ── END DELIMITER EXTRACTION ─────────────────────────────
+
+      const finalHtml = renderMarkdownAndMath(contentToRender, metadata);
       outputBody.innerHTML = finalHtml;
 
       // Inject uploaded images for each stage

@@ -44,25 +44,6 @@
       }
     }
 
-    // Fallback search in KB if indexed DB items are empty
-    if ((!items || items.length === 0) && KB && KB.getKnowledgeItems) {
-      try {
-        const kbItems = KB.getKnowledgeItems ? KB.getKnowledgeItems(level, subject) : [];
-        items = kbItems.map((k, idx) => ({
-          textbookId: k.textbookId || 'tb_official',
-          pageNumber: k.pageNumber || (10 + idx * 2),
-          level: level || k.level || '9eme',
-          subject: subject || k.subject || 'math',
-          title: k.title || k.lessonTitle || 'درس',
-          lesson: k.lessonTitle || lesson || '',
-          content: k.content || k.summary || '',
-          type: k.type || 'activity',
-          number: k.number || 1
-        }));
-      } catch (e) {
-        items = [];
-      }
-    }
 
     const norm = (s) => {
       if (!s) return '';
@@ -347,17 +328,11 @@
       }
     }
 
-    // 2. TEXTBOOK ACTIVITIES, APPLICATIONS & EXERCISES (CNP Catalog + IndexedDB)
+    // 2. TEXTBOOK ACTIVITIES, APPLICATIONS & EXERCISES (IndexedDB from Uploaded PDF)
+    results.textbookActivities = [];
     results.textbookApplications = [];
+    results.textbookExercises = [];
 
-    if (KB && KB.getTextbookActivities) {
-      const catalogActs = KB.getTextbookActivities(level, subject, lesson || query);
-      results.textbookActivities.push(...catalogActs);
-    }
-    if (KB && KB.getTextbookExercises) {
-      const catalogExs = KB.getTextbookExercises(level, subject, lesson || query);
-      results.textbookExercises.push(...catalogExs);
-    }
     if (PDF && PDF.getTextbookActivitiesDB) {
       try {
         const dbActs = await PDF.getTextbookActivitiesDB(level, subject);
