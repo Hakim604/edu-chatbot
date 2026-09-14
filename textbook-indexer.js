@@ -228,7 +228,10 @@
       throw new Error("بيانات PDF غير صالحة أو لا تحتوي على صفحات.");
     }
 
-    const textbookId = docMeta.id || docMeta.textbookId || `tb_${Date.now()}`;
+    const textbookId = docMeta.id || docMeta.textbookId || extractedPDF.id || extractedPDF.textbookId || `tb_${Date.now()}`;
+    docMeta.id = textbookId;
+    docMeta.textbookId = textbookId;
+
     const pageRecords = [];
     const allSegmentedItems = [];
 
@@ -342,14 +345,22 @@
     }
     flushCurrentItem();
 
+    console.log(`[INDEX] PDF pages count = ${extractedPDF.pages ? extractedPDF.pages.length : 0}`);
+    console.log(`[INDEX] pageRecords count = ${pageRecords.length}`);
+    if (pageRecords.length > 0) {
+      console.log(`[INDEX] first page = ${pageRecords[0].pageNumber}`);
+      console.log(`[INDEX] last page = ${pageRecords[pageRecords.length - 1].pageNumber}`);
+    }
+
     // Save Page Records and Segmented Items to IndexedDB
+    console.log("[INDEX] calling saveTextbookPagesDB()...");
     if (PDF && PDF.saveTextbookPagesDB) {
       await PDF.saveTextbookPagesDB(pageRecords);
-      console.log(`[TEXTBOOK] Saved ${pageRecords.length} page records to IndexedDB store 'textbook_pages'`);
+      console.log("[INDEX] saveTextbookPagesDB completed");
     }
     if (PDF && PDF.saveTextbookActivitiesDB) {
       await PDF.saveTextbookActivitiesDB(allSegmentedItems);
-      console.log(`[TEXTBOOK] Saved ${allSegmentedItems.length} segmented items to IndexedDB store 'textbook_activities'`);
+      console.log(`[INDEX] Saved ${allSegmentedItems.length} segmented items to IndexedDB store 'textbook_activities'`);
     }
 
     const isFull = (pageRecords.length === extractedPDF.pages.length) && !docMeta.failedPages && docMeta.failedPages !== 0 ? true : (!docMeta.failedPages && pageRecords.length === extractedPDF.pages.length);

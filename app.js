@@ -781,19 +781,38 @@ function initPDFEvents() {
   if (btnReindex) {
     btnReindex.addEventListener("click", async () => {
       if (!currentBook) return;
+      console.log("[INDEX] Re-indexing triggered for book:", currentBook.id, currentBook.title);
       showToast("🔄 جاري إعادة فهرسة الكتاب المدرسي...");
       try {
         if (window.TextbookIndexer && window.TextbookIndexer.reindexTextbook) {
           await window.TextbookIndexer.reindexTextbook(currentBook.id, currentBook, {
+            id: currentBook.id,
+            textbookId: currentBook.id,
             level: levelSelect ? levelSelect.value : '',
             subject: subjectSelect ? subjectSelect.value : '',
             title: currentBook.title
           });
+
+          if (currentBook.pages && window.PDFManager && window.PDFManager.saveTextbookPagesDB) {
+            const pageObjs = currentBook.pages.map(p => ({
+              textbookId: currentBook.id,
+              bookId: currentBook.id,
+              pageNum: p.pageNum || p.pageNumber,
+              pageNumber: p.pageNum || p.pageNumber,
+              level: levelSelect ? levelSelect.value : '',
+              subject: subjectSelect ? subjectSelect.value : '',
+              text: p.text || p.content || ''
+            }));
+            await window.PDFManager.saveTextbookPagesDB(pageObjs);
+            console.log("[INDEX] Re-indexed page records saved to IndexedDB store 'textbook_pages':", pageObjs.length);
+          }
+
           await updateBookStatsUI(currentBook);
+          await updateKnowledgeSourcesCard();
           showToast("✅ تمت إعادة الفهرسة بنجاح!");
         }
       } catch (err) {
-        console.error(err);
+        console.error("[INDEX ERROR] Re-indexing failed:", err);
         showError(`❌ فشل في إعادة الفهرسة: ${err.message}`);
       }
     });
@@ -833,6 +852,8 @@ async function handlePDFFile(file) {
       console.log("[TEXTBOOK] indexing started...");
       pdfProgressText.textContent = "جاري البناء والفهرسة البيداغوجية لقاعدة المعرفة...";
       await window.TextbookIndexer.indexTextbook(bookObj, {
+        id: bookObj.id,
+        textbookId: bookObj.id,
         level: levelSelect ? levelSelect.value : '',
         subject: subjectSelect ? subjectSelect.value : '',
         title: bookObj.title
@@ -883,37 +904,36 @@ async function updateBookStatsUI(book) {
   if (!badgeStatus) return;
 
   try {
+    // 1. Fetch actual page records from store 'textbook_pages'
+    let dbPages = [];
+    if (window.PDFManager && window.PDFManager.getTextbookPagesDB) {
+      const allPages = await window.PDFManager.getTextbookPagesDB(1, 9999);
+      dbPages = allPages.filter(p => !p.textbookId || String(p.textbookId) === String(book.id));
+    }
+    const indexedPagesCount = dbPages.length > 0 ? dbPages.length : (book.pages ? book.pages.length : 0);
+    const totalPages = book.numPages || indexedPagesCount;
+
+    // 2. Fetch activity items from store 'textbook_activities'
     const items = (window.PDFManager && window.PDFManager.getTextbookActivitiesDB)
       ? await window.PDFManager.getTextbookActivitiesDB()
       : [];
     const bookItems = items.filter(it => String(it.textbookId) === String(book.id));
-    const pagesSet = new Set();
     let actsCount = 0;
     let exsCount = 0;
 
     bookItems.forEach(it => {
-      if (it.pages) it.pages.forEach(p => pagesSet.add(p));
-      else if (it.pageNumber) pagesSet.add(it.pageNumber);
-
       if (it.type === 'activity') actsCount++;
       else if (it.type === 'exercise') exsCount++;
     });
-
-    const indexedPagesCount = pagesSet.size;
-    const totalPages = book.numPages || 0;
 
     if (statPages) statPages.textContent = `📄 ${indexedPagesCount}/${totalPages} صفحة`;
     if (statActs)  statActs.textContent  = `📍 ${actsCount} أنشطة`;
     if (statExs)   statExs.textContent   = `📝 ${exsCount} تمارين`;
 
-    if (indexedPagesCount >= totalPages && totalPages > 0) {
-      badgeStatus.textContent = "🟢 مفهرس بالكامل";
+    if (indexedPagesCount > 0) {
+      badgeStatus.textContent = indexedPagesCount >= totalPages ? "🟢 مفهرس بالكامل" : "🟢 مفهرس";
       badgeStatus.style.background = "#dcfce7";
       badgeStatus.style.color = "#166534";
-    } else if (indexedPagesCount > 0) {
-      badgeStatus.textContent = "🟡 مفهرس جزئياً";
-      badgeStatus.style.background = "#fef9c3";
-      badgeStatus.style.color = "#854d0e";
     } else {
       badgeStatus.textContent = "🔴 غير مفهرس";
       badgeStatus.style.background = "#fee2e2";

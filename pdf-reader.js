@@ -258,15 +258,13 @@ function _normLvl(l) {
 
 // ── TEXTBOOK ACTIVITIES & KNOWLEDGE ITEMS OPERATIONS ────────
 async function saveTextbookActivitiesDB(activities) {
-  if (!Array.isArray(activities)) return [];
-  const saved = [];
-  for (const act of activities) {
+  if (!Array.isArray(activities) || activities.length === 0) return [];
+  const items = activities.map(act => {
     const hasTbId = !!(act.textbookId || act.bookId);
     const hasPage = !!(act.page || act.pageNumber || act.pageStart);
-    // Grounding rule: verified=true requires textbookId AND page reference
     const isVerified = (act.verified !== false) && hasTbId && hasPage;
 
-    const item = {
+    return {
       id: act.id || `act_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       sourceType: 'TEXTBOOK',
       textbookId: String(act.textbookId || act.bookId || ''),
@@ -288,40 +286,74 @@ async function saveTextbookActivitiesDB(activities) {
       classificationConfidence: act.classificationConfidence !== undefined ? act.classificationConfidence : (isVerified ? 1.0 : 0.0),
       createdAt: act.createdAt || new Date().toISOString()
     };
-    await putItem(STORE_TEXTBOOK_ACTIVITIES, item);
-    saved.push(item);
+  });
+  return await putItemsBatch(STORE_TEXTBOOK_ACTIVITIES, items);
+}
+
+async function putItemsBatch(storeName, items) {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const db = await openDB();
+  if (!db) {
+    items.forEach(item => {
+      if (!item.id) item.id = `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      memoryStores[storeName].set(item.id, item);
+    });
+    return items;
   }
-  return saved;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const store = tx.objectStore(storeName);
+    items.forEach(item => {
+      if (!item.id) item.id = `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      store.put(item);
+    });
+    tx.oncomplete = () => {
+      console.log(`[INDEXEDDB] Batch transaction on '${storeName}' completed successfully (${items.length} records).`);
+      resolve(items);
+    };
+    tx.onerror = (e) => {
+      console.error(`[INDEXEDDB ERROR] Batch transaction on '${storeName}' failed:`, tx.error || e);
+      reject(tx.error || e);
+    };
+    tx.onabort = (e) => {
+      console.error(`[INDEXEDDB ABORT] Batch transaction on '${storeName}' aborted:`, tx.error || e);
+      reject(tx.error || new Error("Transaction aborted"));
+    };
+  });
 }
 
 async function saveTextbookPagesDB(pages) {
-  if (!Array.isArray(pages)) return [];
-  const saved = [];
-  for (const p of pages) {
-    const item = {
-      id: p.id || `page_${p.bookId || p.textbookId || 'tb'}_p${p.pageNum || p.pageNumber}`,
-      bookId: String(p.bookId || p.textbookId || ''),
-      textbookId: String(p.textbookId || p.bookId || ''),
-      pageNum: Number(p.pageNum || p.pageNumber),
-      pageNumber: Number(p.pageNumber || p.pageNum),
-      level: p.level || '',
-      subject: p.subject || '',
-      title: p.title || '',
-      text: p.text || p.content || p.rawText || '',
-      content: p.content || p.text || p.rawText || '',
-      sections: p.sections || [],
-      activities: p.activities || [],
-      rules: p.rules || [],
-      examples: p.examples || [],
-      exercises: p.exercises || [],
-      concepts: p.concepts || [],
-      keywords: p.keywords || [],
-      createdAt: p.createdAt || new Date().toISOString()
-    };
-    await putItem(STORE_TEXTBOOK_PAGES, item);
-    saved.push(item);
+  if (!Array.isArray(pages) || pages.length === 0) return [];
+  console.log(`[INDEX] saveTextbookPagesDB called with ${pages.length} page items.`);
+  const items = pages.map(p => ({
+    id: p.id || `page_${p.textbookId || p.bookId || 'tb'}_p${p.pageNum || p.pageNumber}`,
+    bookId: String(p.bookId || p.textbookId || ''),
+    textbookId: String(p.textbookId || p.bookId || ''),
+    pageNum: Number(p.pageNum || p.pageNumber),
+    pageNumber: Number(p.pageNumber || p.pageNum),
+    level: p.level || '',
+    subject: p.subject || '',
+    title: p.title || '',
+    text: p.text || p.content || p.rawText || '',
+    content: p.content || p.text || p.rawText || '',
+    sections: p.sections || [],
+    activities: p.activities || [],
+    rules: p.rules || [],
+    examples: p.examples || [],
+    exercises: p.exercises || [],
+    concepts: p.concepts || [],
+    keywords: p.keywords || [],
+    createdAt: p.createdAt || new Date().toISOString()
+  }));
+
+  try {
+    const saved = await putItemsBatch(STORE_TEXTBOOK_PAGES, items);
+    console.log(`[INDEX] saveTextbookPagesDB completed! Saved ${saved.length} records to store 'textbook_pages'.`);
+    return saved;
+  } catch (err) {
+    console.error(`[INDEX ERROR] saveTextbookPagesDB failed:`, err);
+    throw err;
   }
-  return saved;
 }
 
 async function getTextbookPagesDB(startPage, endPage, level, subject) {
