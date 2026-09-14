@@ -98,7 +98,7 @@
     <!-- ── VIEW 1: CREATOR FORM PANEL ── -->
     <div class="form-panel" id="creatorPanel">
 
-      <!-- ── SECTION 1: TEACHER & SCHOOL INFO (PERSISTENT) ── -->
+      <!-- 1. 👨‍🏫 بيانات الأستاذ(ة) والمؤسسة التربوية -->
       <div class="section-box teacher-section">
         <div class="section-title">
           <span>👨‍🏫</span> بيانات الأستاذ(ة) والمؤسسة التربوية
@@ -120,13 +120,12 @@
         </div>
       </div>
 
-      <!-- ── SECTION 2: TUNISIAN CURRICULUM SELECTOR (CYCLE SEPARATION) ── -->
-      <div class="section-box">
+      <!-- 2. 🇹🇳 تحديد سلك التدريس والمنهاج الدراسي التونسي -->
+      <div class="section-box cycle-section">
         <div class="section-title">
           <span>🇹🇳</span> تحديد سلك التدريس والمنهاج الدراسي التونسي
         </div>
 
-        <!-- Cycle Switcher: Middle School vs High School -->
         <div class="cycle-selector-wrapper">
           <label class="field-label">🎓 اختر سلك التدريس المعتمد:</label>
           <div class="cycle-tabs">
@@ -146,20 +145,114 @@
             </button>
           </div>
         </div>
+      </div>
 
-        <div class="fields-grid">
-          <div class="field-group">
-            <label class="field-label" id="lblLevel">🏫 المستوى والشعبة</label>
-            <select id="levelSelect" class="text-input">
-              <option value="">-- اختر المستوى --</option>
-            </select>
+      <!-- 3. 🏫 المستوى الدراسي (التعليم الأساسي) -->
+      <div class="section-box level-section">
+        <div class="section-title">
+          <span>🏫</span> <span id="lblLevel">المستوى الدراسي (التعليم الأساسي)</span>
+        </div>
+        <div class="field-group">
+          <select id="levelSelect" class="text-input">
+            <option value="">-- اختر المستوى --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 4. 📚 المادة التعليمية -->
+      <div class="section-box subject-section">
+        <div class="section-title">
+          <span>📚</span> <span id="lblSubject">المادة التعليمية</span>
+        </div>
+        <div class="field-group">
+          <select id="subjectSelect" class="text-input">
+            <option value="">-- اختر المادة أولاً --</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 5. 📖 الكتاب المدرسي التونسي (PDF) -->
+      <div class="section-box textbook-section">
+        <div class="section-title">
+          <span>📖</span> الكتاب المدرسي التونسي (PDF)
+          <span class="badge-optional">اختياري — يُحفظ في المتصفح</span>
+        </div>
+
+        <div class="pdf-container">
+          <div class="saved-books-bar" id="savedBooksBar">
+            <label class="field-label">📚 الكتب والمراجع المحفوظة بذاكرة المتصفح:</label>
+            <div class="saved-books-controls">
+              <select id="savedBooksSelect" class="text-input">
+                <option value="">-- لا يوجد كتاب محدد (أو ارفع كتاباً جديداً) --</option>
+              </select>
+              <button type="button" class="btn-danger-sm" id="btnDeleteBook" title="حذف الكتاب المحدد" hidden>🗑️ مسح الكتاب المرفق</button>
+            </div>
           </div>
 
-          <div class="field-group">
-            <label class="field-label" id="lblSubject">📚 المادة التعليمية</label>
-            <select id="subjectSelect" class="text-input">
-              <option value="">-- اختر المادة أولاً --</option>
-            </select>
+          <!-- Dropzone -->
+          <div class="dropzone" id="pdfDropzone">
+            <input type="file" id="pdfFileInput" accept="application/pdf" hidden />
+            <div class="dropzone-content">
+              <span class="drop-icon">📥</span>
+              <p>اسحب وأفلت <strong>ملف الكتاب المدرسي (PDF)</strong> هنا أو <button type="button" class="btn-link" id="btnBrowsePDF">تصفح ملفاتك</button></p>
+              <small>يتم حفظ الكتاب تلقائياً ودائماً في متصفحك للرجوع إليه في أي وقت</small>
+            </div>
+          </div>
+
+          <!-- Upload Progress -->
+          <div class="pdf-progress-box" id="pdfProgressBox" hidden>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="pdfProgressBar"></div>
+            </div>
+            <p id="pdfProgressText">جاري قراءة واستخراج نصوص الكتاب... (0%)</p>
+          </div>
+
+          <!-- Active book info -->
+          <div class="active-book-card" id="activeBookCard" hidden>
+            <div class="active-book-info">
+              <span class="book-icon">📕</span>
+              <div>
+                <strong id="activeBookTitle">كتاب الرياضيات</strong>
+                <p id="activeBookMeta">120 صفحة • محفوظ محلياً</p>
+                <div id="indexStatsBadgeGroup" style="margin-top: 4px; font-size: 0.82rem; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                  <span id="badgeIndexStatus" style="background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; border: 1px solid #86efac; font-weight: bold;">🟢 مفهرس بالكامل</span>
+                  <span id="statPagesCount" style="color: #475569;">📄 0/0 صفحة</span>
+                  <span id="statActsCount" style="color: #475569;">📍 0 أنشطة</span>
+                  <span id="statExsCount" style="color: #475569;">📝 0 تمارين</span>
+                  <button type="button" id="btnReindexBook" class="btn-secondary btn-sm" style="padding: 1px 6px; font-size: 0.78rem;">🔄 إعادة الفهرسة</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. 📑 الصفحات المرجعية في الكتاب المدرسي -->
+      <div class="section-box pages-section">
+        <div class="section-title">
+          <span>📑</span> الصفحات المرجعية في الكتاب المدرسي
+          <span class="badge-optional">تحديد أرقام الصفحات المطلوبة للدرس</span>
+        </div>
+        <div class="page-range-selector">
+          <label class="field-label">📄 نطاق الصفحات المستهدفة للدرس (مثال: من 19 إلى 21):</label>
+          <div class="range-inputs" style="display:flex; gap:10px; align-items:center;">
+            <input type="number" id="pageFrom" placeholder="من صفحة" min="1" class="text-input input-sm" />
+            <span>إلى</span>
+            <input type="number" id="pageTo" placeholder="إلى صفحة" min="1" class="text-input input-sm" />
+            <button type="button" class="btn-secondary btn-sm" id="btnUseAllPages">كامل الكتاب</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. 📘 معلومات الدرس -->
+      <div class="section-box lesson-info-section">
+        <div class="section-title">
+          <span>📘</span> معلومات الدرس
+        </div>
+        <div class="fields-grid">
+          <div class="field-group full-width">
+            <label class="field-label" id="lblLessonTitle">📖 عنوان الدرس أو النشاط</label>
+            <input type="text" id="lessonTitle" class="text-input" placeholder="مثال: مبرهنة طالس في المثلث، التعيين في المستوي..." />
           </div>
 
           <div class="field-group">
@@ -182,10 +275,45 @@
               <option value="fr">fr</option>
             </select>
           </div>
+        </div>
+      </div>
 
+      <!-- 8. ⏱️ مدة الحصة -->
+      <div class="section-box duration-section">
+        <div class="section-title">
+          <span>⏱️</span> مدة الحصة والتوزيع الزمني
+        </div>
+        <div class="fields-grid">
+          <div class="field-group">
+            <label class="field-label">⏱️ مدة الحصة البيداغوجية</label>
+            <select id="duration" class="text-input">
+              <option>45 دقيقة (حصة عادية)</option>
+              <option selected>55 دقيقة (حصة نظامية ثانوية/إعدادية)</option>
+              <option>90 دقيقة / ساعتان (حصة مضاعفة)</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label">🔢 ترتيب الحصة في التوزيع الزمني</label>
+            <input type="text" id="sessionNum" class="text-input" placeholder="مثال: الحصة 2 من 4" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 9. 🎯 أهداف التعلم والكفايات -->
+      <div class="section-box objectives-section">
+        <div class="section-title">
+          <span>🎯</span> أهداف التعلم والكفايات والدعامات البيداغوجية
+        </div>
+        <div class="fields-grid" style="margin-bottom: 15px;">
           <div class="field-group full-width">
-            <label class="field-label" id="lblLessonTitle">📖 عنوان الدرس أو النشاط</label>
-            <input type="text" id="lessonTitle" class="text-input" placeholder="مثال: مبرهنة طالس في المثلث، التعيين في المستوي..." />
+            <label class="field-label">🎯 الكفايات والأهداف البيداغوجية</label>
+            <textarea id="objectives" class="text-input textarea" rows="2"
+              placeholder="مثال: توظيف النظريات لحل المسائل، تنمية التفكير الاستدلالي المنطقي..."></textarea>
+          </div>
+          <div class="field-group full-width">
+            <label class="field-label">🛠️ الدعامات البيداغوجية والوسائل التعليمية</label>
+            <input type="text" id="materials" class="text-input"
+              placeholder="مثال: الكتاب المدرسي التونسي، السبورة، الآلة الحاسبة، أوراق الأنشطة..." />
           </div>
         </div>
 
@@ -240,135 +368,71 @@
             </select>
           </div>
         </div>
-      </div>
 
-      <!-- ── SECTION 3: ATTACHMENTS BY PEDAGOGICAL STAGES ── -->
-
-      <!-- 3.1 STAGE 1: REMIND (استحضر) -->
-      <div class="section-box remind-section">
-        <div class="section-title">
-          <span>🧠</span> <span id="secTitleRemind">1. مرحلة «استحضر» (المكتسبات القبلية والتذكير)</span>
-          <span class="badge-optional">إرفاق صور أو كتابة نص / LaTeX</span>
-        </div>
-        <div class="dynamic-items-container" id="remindList"></div>
-        <div class="add-item-bar">
-          <button type="button" class="btn-add-item btn-add-remind" id="btnAddRemind">
-            <span>➕</span> <span id="btnTextRemind">إضافة عنصر في مرحلة «استحضر»</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 3.2 STAGE 2: ACTIVITY (نشاط) -->
-      <div class="section-box activities-manager-section">
-        <div class="section-title">
-          <span>🎯</span> <span id="secTitleActivity">2. مرحلة «نشاط» (الاستكشاف وبناء المفهوم)</span>
-          <span class="badge-optional">إرفاق صور أو كتابة نص / LaTeX</span>
-        </div>
-        <div class="dynamic-items-container" id="activitiesList"></div>
-        <div class="add-item-bar">
-          <button type="button" class="btn-add-item" id="btnAddActivity">
-            <span>➕</span> <span id="btnTextActivity">إضافة نشاط استكشافي آخر</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 3.3 STAGE 3: APPLICATION (تطبيق) -->
-      <div class="section-box application-section">
-        <div class="section-title">
-          <span>✏️</span> <span id="secTitleApp">4. مرحلة «تطبيق» (التثبيت الفوري)</span>
-          <span class="badge-optional">إرفاق صور أو كتابة نص / LaTeX</span>
-        </div>
-        <div class="dynamic-items-container" id="applicationsList"></div>
-        <div class="add-item-bar">
-          <button type="button" class="btn-add-item btn-add-app" id="btnAddApplication">
-            <span>➕</span> <span id="btnTextApp">إضافة تطبيق فوري آخر</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 3.4 STAGE 4: EXERCISE (تمرين) -->
-      <div class="section-box exercises-manager-section">
-        <div class="section-title">
-          <span>📐</span> <span id="secTitleExercise">5. مرحلة «تمرين» (العمل الفردي والواجب المنزلي)</span>
-          <span class="badge-optional">إرفاق صور أو كتابة نص / LaTeX</span>
-        </div>
-        <div class="dynamic-items-container" id="exercisesList"></div>
-        <div class="add-item-bar">
-          <button type="button" class="btn-add-item btn-add-exercise" id="btnAddExercise">
-            <span>➕</span> <span id="btnTextExercise">إضافة تمرين أو واجب منزلي آخر</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- ── SECTION 4: TEXTBOOK / PDF UPLOAD ── -->
-      <div class="section-box textbook-section">
-        <div class="section-title">
-          <span>📖</span> الكتاب المدرسي التونسي (PDF)
-          <span class="badge-optional">اختياري — يُحفظ في المتصفح</span>
-        </div>
-
-        <div class="pdf-container">
-          <div class="saved-books-bar" id="savedBooksBar">
-            <label class="field-label">📚 الكتب والمراجع المحفوظة بذاكرة المتصفح:</label>
-            <div class="saved-books-controls">
-              <select id="savedBooksSelect" class="text-input">
-                <option value="">-- لا يوجد كتاب محدد (أو ارفع كتاباً جديداً) --</option>
-              </select>
-              <button type="button" class="btn-danger-sm" id="btnDeleteBook" title="حذف الكتاب المحدد" hidden>🗑️ حذف</button>
+        <!-- STAGES ATTACHMENTS (REMIND, ACTIVITY, APPLICATION, EXERCISE) -->
+        <div style="margin-top: 15px;">
+          <!-- 3.1 STAGE 1: REMIND (استحضر) -->
+          <div class="section-box remind-section" style="margin-bottom: 12px;">
+            <div class="section-title">
+              <span>🧠</span> <span id="secTitleRemind">1. مرحلة «استحضر» (المكتسبات القبلية والتذكير)</span>
+              <span class="badge-optional">إرفاق صور أو كتابة نص / LaTeX</span>
+            </div>
+            <div class="dynamic-items-container" id="remindList"></div>
+            <div class="add-item-bar">
+              <button type="button" class="btn-add-item btn-add-remind" id="btnAddRemind">
+                <span>➕</span> <span id="btnTextRemind">إضافة عنصر في مرحلة «استحضر»</span>
+              </button>
             </div>
           </div>
 
-          <!-- Dropzone -->
-          <div class="dropzone" id="pdfDropzone">
-            <input type="file" id="pdfFileInput" accept="application/pdf" hidden />
-            <div class="dropzone-content">
-              <span class="drop-icon">📥</span>
-              <p>اسحب وأفلت <strong>ملف الكتاب المدرسي (PDF)</strong> هنا أو <button type="button" class="btn-link" id="btnBrowsePDF">تصفح ملفاتك</button></p>
-              <small>يتم حفظ الكتاب تلقائياً ودائماً في متصفحك للرجوع إليه في أي وقت</small>
+          <!-- 3.2 STAGE 2: ACTIVITY (نشاط) -->
+          <div class="section-box activities-manager-section" style="margin-bottom: 12px;">
+            <div class="section-title">
+              <span>🎯</span> <span id="secTitleActivity">2. مرحلة «نشاط» (الاستكشاف وبناء المفهوم)</span>
+              <span class="badge-optional">إرفاق صور أو كتابة نص / LaTeX</span>
+            </div>
+            <div class="dynamic-items-container" id="activitiesList"></div>
+            <div class="add-item-bar">
+              <button type="button" class="btn-add-item" id="btnAddActivity">
+                <span>➕</span> <span id="btnTextActivity">إضافة نشاط استكشافي آخر</span>
+              </button>
             </div>
           </div>
 
-          <!-- Upload Progress -->
-          <div class="pdf-progress-box" id="pdfProgressBox" hidden>
-            <div class="progress-bar-bg">
-              <div class="progress-bar-fill" id="pdfProgressBar"></div>
+          <!-- 3.3 STAGE 3: APPLICATION (تطبيق) -->
+          <div class="section-box application-section" style="margin-bottom: 12px;">
+            <div class="section-title">
+              <span>✏️</span> <span id="secTitleApp">4. مرحلة «تطبيق» (التثبيت الفوري)</span>
+              <span class="badge-optional">إرفاق صور أو كتابة نص / LaTeX</span>
             </div>
-            <p id="pdfProgressText">جاري قراءة واستخراج نصوص الكتاب... (0%)</p>
+            <div class="dynamic-items-container" id="applicationsList"></div>
+            <div class="add-item-bar">
+              <button type="button" class="btn-add-item btn-add-app" id="btnAddApplication">
+                <span>➕</span> <span id="btnTextApp">إضافة تطبيق فوري آخر</span>
+              </button>
+            </div>
           </div>
 
-          <!-- Active book info & page selection -->
-          <div class="active-book-card" id="activeBookCard" hidden>
-            <div class="active-book-info">
-              <span class="book-icon">📕</span>
-              <div>
-                <strong id="activeBookTitle">كتاب الرياضيات</strong>
-                <p id="activeBookMeta">120 صفحة • محفوظ محلياً</p>
-                <div id="indexStatsBadgeGroup" style="margin-top: 4px; font-size: 0.82rem; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-                  <span id="badgeIndexStatus" style="background: #dcfce7; color: #166534; padding: 2px 6px; border-radius: 4px; border: 1px solid #86efac; font-weight: bold;">🟢 مفهرس بالكامل</span>
-                  <span id="statPagesCount" style="color: #475569;">📄 0/0 صفحة</span>
-                  <span id="statActsCount" style="color: #475569;">📍 0 أنشطة</span>
-                  <span id="statExsCount" style="color: #475569;">📝 0 تمارين</span>
-                  <button type="button" id="btnReindexBook" class="btn-secondary btn-sm" style="padding: 1px 6px; font-size: 0.78rem;">🔄 إعادة الفهرسة</button>
-                </div>
-              </div>
+          <!-- 3.4 STAGE 4: EXERCISE (تمرين) -->
+          <div class="section-box exercises-manager-section">
+            <div class="section-title">
+              <span>📐</span> <span id="secTitleExercise">5. مرحلة «تمرين» (العمل الفردي والواجب المنزلي)</span>
+              <span class="badge-optional">إرفاق صور أو كتابة نص / LaTeX</span>
             </div>
-            <div class="page-range-selector">
-              <label class="field-label">📄 نطاق الصفحات المستهدفة للدرس (اختياري):</label>
-              <div class="range-inputs">
-                <input type="number" id="pageFrom" placeholder="من صفحة" min="1" class="text-input input-sm" />
-                <span>إلى</span>
-                <input type="number" id="pageTo" placeholder="إلى صفحة" min="1" class="text-input input-sm" />
-                <button type="button" class="btn-secondary btn-sm" id="btnUseAllPages">كامل الكتاب</button>
-              </div>
+            <div class="dynamic-items-container" id="exercisesList"></div>
+            <div class="add-item-bar">
+              <button type="button" class="btn-add-item btn-add-exercise" id="btnAddExercise">
+                <span>➕</span> <span id="btnTextExercise">إضافة تمرين أو واجب منزلي آخر</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ── SECTION 5: OPTIONS & PAGE ORIENTATION (PORTRAIT / LANDSCAPE) ── -->
-      <div class="section-box">
+      <!-- 10. ⚙️ إعدادات الجذاذة -->
+      <div class="section-box settings-section">
         <div class="section-title">
-          <span>⚙️</span> خيارات العرض واتجاه الصفحة A4 (أفقي / عمودي)
+          <span>⚙️</span> إعدادات الجذاذة والطباعة
         </div>
         <div class="fields-grid">
           <div class="field-group">
@@ -390,41 +454,14 @@
         </div>
       </div>
 
-      <!-- Fiche Pédagogique Fields -->
-      <div id="ficheFields" class="extra-fields" hidden>
-        <div class="fields-grid">
-          <div class="field-group">
-            <label class="field-label">⏱️ مدة الحصة البيداغوجية</label>
-            <select id="duration" class="text-input">
-              <option>45 دقيقة (حصة عادية)</option>
-              <option selected>55 دقيقة (حصة نظامية ثانوية/إعدادية)</option>
-              <option>90 دقيقة / ساعتان (حصة مضاعفة)</option>
-            </select>
-          </div>
-          <div class="field-group">
-            <label class="field-label">🔢 ترتيب الحصة في التوزيع الزمني</label>
-            <input type="text" id="sessionNum" class="text-input" placeholder="مثال: الحصة 2 من 4" />
-          </div>
-          <div class="field-group full-width">
-            <label class="field-label">🎯 الكفايات والأهداف البيداغوجية</label>
-            <textarea id="objectives" class="text-input textarea" rows="2"
-              placeholder="مثال: توظيف النظريات لحل المسائل، تنمية التفكير الاستدلالي المنطقي..."></textarea>
-          </div>
-          <div class="field-group full-width">
-            <label class="field-label">🛠️ الدعامات البيداغوجية والوسائل التعليمية</label>
-            <input type="text" id="materials" class="text-input"
-              placeholder="مثال: الكتاب المدرسي التونسي، السبورة، الآلة الحاسبة، أوراق الأنشطة..." />
-          </div>
-        </div>
-      </div>
-
-      <!-- Generate Button -->
+      <!-- 11. ✨ زر التوليد -->
       <div class="generate-bar">
         <button class="btn-generate" id="btnGenerate">
           <span id="btnIcon">✨</span>
           <span id="btnText">توليد الوثيقة البيداغوجية (استحضر ➔ نشاط ➔ قاعدة ➔ تطبيق ➔ تمرين)</span>
         </button>
       </div>
+
     </div>
 
     <!-- ── VIEW 2: ARCHIVE & SAVED DOCUMENTS PANEL (AT TOP ONLY) ── -->
