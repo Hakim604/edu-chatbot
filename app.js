@@ -1176,6 +1176,39 @@ async function handleGenerate() {
   if (!subjectId) { showError(isFr ? "⚠️ Veuillez sélectionner la matière." : (isEn ? "⚠️ Please select the subject." : "⚠️ الرجاء اختيار المادة التعليمية")); return; }
   if (!titleVal)  { showError(isFr ? "⚠️ Veuillez saisir le titre de la leçon." : (isEn ? "⚠️ Please enter the lesson title." : "⚠️ الرجاء إدخال عنوان الدرس أو النشاط")); return; }
 
+  // ── PHASE 14 & 17 FIX: PDF Gate (MUST EXECUTE BEFORE ANY KNOWLEDGE SEARCH OR UI STATE CHANGE) ──
+  {
+    if (currentMode === "fiche") {
+      if (!currentBook) {
+        showError("⚠️ يرجى رفع وفهرسة الكتاب المدرسي أولاً قبل إنشاء الجذاذة.");
+        return; // STOP! No loading state set, no view changed, no Gemini request!
+      }
+
+      const fromVal = parseInt(pageFrom ? pageFrom.value : "", 10);
+      const toVal   = parseInt(pageTo   ? pageTo.value   : "", 10);
+      const hasPageRange = !isNaN(fromVal) && fromVal > 0;
+      const startVal = hasPageRange ? fromVal : 1;
+      const endVal   = (!isNaN(toVal) && toVal >= startVal) ? toVal : (hasPageRange ? startVal : 500);
+
+      let hasIndexedPages = false;
+      if (window.PDFManager && window.PDFManager.getTextbookPagesDB) {
+        try {
+          const dbPages = await window.PDFManager.getTextbookPagesDB(startVal, endVal);
+          const bookPages = dbPages.filter(p => !p.textbookId || String(p.textbookId) === String(currentBook.id));
+          hasIndexedPages = Array.isArray(bookPages) && bookPages.length > 0;
+        } catch (gateErr) {
+          console.warn("[TEXTBOOK GATE ERROR]", gateErr);
+        }
+      }
+
+      if (!hasIndexedPages) {
+        showError("⚠️ يرجى رفع وفهرسة الكتاب المدرسي أولاً قبل إنشاء الجذاذة.");
+        return; // STOP! No loading state set, no view changed, no Gemini request!
+      }
+    }
+  }
+  // ── END PDF GATE ─────────────────────────────────────────────────────────
+
   // Source selection enforcement check
   const actSourceSelect = $("activitySourceSelect");
   const exSourceSelect  = $("exerciseSourceSelect");
@@ -1209,39 +1242,6 @@ async function handleGenerate() {
 
   const levelLabel   = CURRICULUM.getLevelLabel(levelId);
   const subjectLabel = CURRICULUM.getSubjects(currentCycle).find((s) => s.id === subjectId)?.label || subjectId;
-
-  // ── PHASE 14 & 17 FIX: PDF Gate (MUST EXECUTE BEFORE ANY UI STATE CHANGE) ──
-  {
-    if (currentMode === "fiche") {
-      if (!currentBook) {
-        showError("⚠️ يرجى رفع وفهرسة الكتاب المدرسي أولاً قبل إنشاء الجذاذة.");
-        return; // STOP! No loading state set, no view changed, no Gemini request!
-      }
-
-      const fromVal = parseInt(pageFrom ? pageFrom.value : "", 10);
-      const toVal   = parseInt(pageTo   ? pageTo.value   : "", 10);
-      const hasPageRange = !isNaN(fromVal) && fromVal > 0;
-      const startVal = hasPageRange ? fromVal : 1;
-      const endVal   = (!isNaN(toVal) && toVal >= startVal) ? toVal : (hasPageRange ? startVal : 500);
-
-      let hasIndexedPages = false;
-      if (window.PDFManager && window.PDFManager.getTextbookPagesDB) {
-        try {
-          const dbPages = await window.PDFManager.getTextbookPagesDB(startVal, endVal);
-          const bookPages = dbPages.filter(p => !p.textbookId || String(p.textbookId) === String(currentBook.id));
-          hasIndexedPages = Array.isArray(bookPages) && bookPages.length > 0;
-        } catch (gateErr) {
-          console.warn("[TEXTBOOK GATE ERROR]", gateErr);
-        }
-      }
-
-      if (!hasIndexedPages) {
-        showError("⚠️ يرجى رفع وفهرسة الكتاب المدرسي أولاً قبل إنشاء الجذاذة.");
-        return; // STOP! No loading state set, no view changed, no Gemini request!
-      }
-    }
-  }
-  // ── END PDF GATE ─────────────────────────────────────────────────────────
 
   let bookContext = "";
   try {
