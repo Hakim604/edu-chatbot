@@ -177,7 +177,13 @@
     let pages = [];
     if (PDF && PDF.getTextbookPagesDB) {
       try {
-        pages = await PDF.getTextbookPagesDB(start, end, level, subject);
+        const allPages = await PDF.getTextbookPagesDB(start, end, level, subject);
+        if (textbookId) {
+          const targetId = String(textbookId);
+          pages = allPages.filter(p => String(p.textbookId || p.bookId || '') === targetId);
+        } else {
+          pages = allPages;
+        }
       } catch (e) {
         pages = [];
       }
@@ -188,6 +194,7 @@
       try {
         const activities = await PDF.getTextbookActivitiesDB(level, subject);
         const inRange = activities.filter(a => {
+          if (textbookId && String(a.textbookId || a.bookId || '') !== String(textbookId)) return false;
           const p = Number(a.page || a.pageNumber);
           return !isNaN(p) && p >= start && p <= end;
         });
@@ -200,6 +207,7 @@
             pageMap.set(pNum, {
               pageNum: pNum,
               pageNumber: pNum,
+              textbookId: textbookId || pageActs[0].textbookId || pageActs[0].bookId,
               level: level || pageActs[0].level,
               subject: subject || pageActs[0].subject,
               title: pageActs[0].lesson || pageActs[0].title || `الصفحة ${pNum}`,
@@ -217,6 +225,23 @@
         pages = [];
       }
     }
+
+    // Strict page range filtering and sorting
+    pages = pages.filter(p => {
+      const pNum = Number(p.pageNum || p.pageNumber);
+      return !isNaN(pNum) && pNum >= start && pNum <= end;
+    }).sort((a, b) => Number(a.pageNum || a.pageNumber) - Number(b.pageNum || b.pageNumber));
+
+    console.log(`=== PHASE 17 SOURCE TRACE ===`);
+    console.log(`Book ID: ${textbookId || 'ANY'}`);
+    console.log(`Page range: ${start} - ${end}`);
+    console.log(`Retrieved page count: ${pages.length}`);
+    console.log(`Retrieved page numbers: ${pages.map(p => p.pageNum || p.pageNumber).join(',')}`);
+    pages.forEach(p => {
+      const pNum = p.pageNum || p.pageNumber;
+      const len = (p.text || p.content || '').length;
+      console.log(`  Page ${pNum} text length: ${len} chars`);
+    });
 
     return pages;
   }
