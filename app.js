@@ -727,6 +727,7 @@ async function loadSavedBooksList() {
 
     if (!Array.isArray(books) || books.length === 0) {
       currentBook = null;
+      window.currentBook = null;
       if (typeof activeBookCard !== 'undefined' && activeBookCard) activeBookCard.hidden = true;
       if (typeof btnDeleteBook !== 'undefined' && btnDeleteBook) btnDeleteBook.hidden = true;
       return;
@@ -765,6 +766,7 @@ async function loadSavedBooksList() {
       setActiveBook(activeToRestore);
     } else {
       currentBook = null;
+      window.currentBook = null;
       if (typeof activeBookCard !== 'undefined' && activeBookCard) activeBookCard.hidden = true;
       if (typeof btnDeleteBook !== 'undefined' && btnDeleteBook) btnDeleteBook.hidden = true;
     }
@@ -792,7 +794,7 @@ function initPDFEvents() {
 
   savedBooksSelect.addEventListener("change", async () => {
     const bookId = savedBooksSelect.value;
-    if (!bookId) { currentBook = null; activeBookCard.hidden = true; btnDeleteBook.hidden = true; return; }
+    if (!bookId) { currentBook = null; window.currentBook = null; activeBookCard.hidden = true; btnDeleteBook.hidden = true; return; }
     try {
       const book = await window.PDFManager.getBookFromDB(bookId);
       if (book) {
@@ -821,6 +823,7 @@ function initPDFEvents() {
 
         // Complete UI & State Cleanup
         currentBook = null;
+        window.currentBook = null;
         activeBookCard.hidden = true;
         btnDeleteBook.hidden  = true;
         if (savedBooksSelect) savedBooksSelect.value = "";
@@ -1015,10 +1018,12 @@ async function updateBookStatsUI(book) {
 
 function setActiveBook(book) {
   currentBook = book;
+  window.currentBook = book;
   activeBookTitle.textContent = book.title;
-  activeBookMeta.textContent  = `${book.numPages} صفحة • محفوظ في المتصفح`;
+  activeBookMeta.textContent  = `${book.numPages || (book.pages ? book.pages.length : 0)} صفحة • محفوظ في المتصفح`;
   pageFrom.value = ""; pageTo.value = "";
-  pageFrom.max = book.numPages; pageTo.max = book.numPages;
+  pageFrom.max = book.numPages || (book.pages ? book.pages.length : 9999);
+  pageTo.max = book.numPages || (book.pages ? book.pages.length : 9999);
   activeBookCard.hidden = false;
   btnDeleteBook.hidden  = false;
   updateBookStatsUI(book);
