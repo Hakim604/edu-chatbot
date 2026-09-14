@@ -632,16 +632,17 @@ async function extractTextFromPDF(arrayBuffer, onProgress, docMeta = {}) {
     const page = await pdfDoc.getPage(pageNum);
     const textContent = await page.getTextContent();
     
-    const rawPageText = textContent.items
-      .map((item) => item.str)
-      .join(" ")
-      .trim();
+    const rawPageText = textContent && textContent.items
+      ? textContent.items.map((item) => item.str).join(" ").trim()
+      : "";
 
     const normalizedText = normalizeExtractedMathText(rawPageText);
 
-    if (normalizedText.length > 0) {
-      pages.push({ pageNum, text: normalizedText });
-    }
+    pages.push({
+      pageNum,
+      pageNumber: pageNum,
+      text: (normalizedText && normalizedText.length > 0) ? normalizedText : (rawPageText || `[صفحة ${pageNum}]`)
+    });
 
     if (onProgress) {
       onProgress(pageNum, numPages);
